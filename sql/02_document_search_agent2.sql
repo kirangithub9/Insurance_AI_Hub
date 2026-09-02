@@ -12,6 +12,12 @@
 -- text of each policy/contract document (e.g. via Cortex PARSE_DOCUMENT if
 -- you loaded raw PDFs/DOCX into a stage — not covered here since your table
 -- already has a CONTENT_TEXT column, implying text extraction is done).
+--
+-- NOTE: the actual data has the exclusion-clause and coverage-limit text in
+-- separate EXCLUSION_CLAUSES / COVERAGE_SUMMARY columns, not in CONTENT_TEXT
+-- (which is just a one-line policy description). All three are concatenated
+-- below so questions like "what are the exclusion clauses for water damage"
+-- can actually match — indexing CONTENT_TEXT alone cannot answer them.
 -- ============================================================================
 
 USE DATABASE INSURANCE_AI_HUB;
@@ -40,7 +46,9 @@ SELECT
 FROM POLICY_DOCUMENTS pd,
      LATERAL FLATTEN(
        input => SNOWFLAKE.CORTEX.SPLIT_TEXT_RECURSIVE_CHARACTER(
-         pd.CONTENT_TEXT,
+         'Overview: ' || COALESCE(pd.CONTENT_TEXT, '') ||
+           '\n\nCoverage: ' || COALESCE(pd.COVERAGE_SUMMARY, '') ||
+           '\n\nExclusions: ' || COALESCE(pd.EXCLUSION_CLAUSES, ''),
          'none',   -- use 'markdown' instead if CONTENT_TEXT is markdown-formatted
          1200,     -- chunk_size (characters)
          200       -- overlap (characters)

@@ -40,10 +40,10 @@ CREATE OR REPLACE AGENT ENTERPRISE_AI_AGENT
         type: "cortex_search"
         name: "DocumentQA"
         description: "Searches and answers questions about the text of insurance policy documents, contracts, exclusion clauses, and coverage summaries. Use when the question is about what a specific policy document says, not about aggregate numbers."
-    # - tool_spec:
-    #     type: "cortex_analyst_text_to_sql"
-    #     name: "DataQualityAgent"
-    #     description: "Answers conversational root-cause questions about data quality rule failures, column health, and DQ scores across the platform's tables."
+    - tool_spec:
+        type: "cortex_analyst_text_to_sql"
+        name: "DataQualityAgent"
+        description: "Answers conversational root-cause questions about data quality rule failures, column health, and DQ scores across the platform's tables."
 
   tool_resources:
     AnalyticsAgent:
@@ -53,8 +53,8 @@ CREATE OR REPLACE AGENT ENTERPRISE_AI_AGENT
       max_results: "5"
       id_column: "CHUNK_ID"
       title_column: "DOCUMENT_TITLE"
-    # DataQualityAgent:
-    #   semantic_view: "INSURANCE_AI_HUB.DATA_QUALITY.DQ_SEMANTIC_VIEW"
+    DataQualityAgent:
+      semantic_view: "INSURANCE_AI_HUB.DATA_QUALITY.DQ_SEMANTIC_VIEW"
   $$;
 
 -- Confirm it's registered

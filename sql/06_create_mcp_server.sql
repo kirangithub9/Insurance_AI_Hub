@@ -24,11 +24,11 @@ CREATE OR REPLACE MCP SERVER ENTERPRISE_AI_MCP_SERVER
         identifier: "INSURANCE_AI_HUB.DOCUMENTS.POLICY_DOCUMENT_SEARCH_SVC"
         description: "Semantic search over insurance policy documents, contracts, and exclusion clauses."
 
-      # - title: "Data Quality Root Cause"
-      #   name: "data_quality_agent"
-      #   type: "CORTEX_ANALYST_MESSAGE"
-      #   identifier: "INSURANCE_AI_HUB.DATA_QUALITY.DQ_SEMANTIC_VIEW"
-      #   description: "Conversational root-cause analysis over data quality rules, results, and column health."
+      - title: "Data Quality Root Cause"
+        name: "data_quality_agent"
+        type: "CORTEX_ANALYST_MESSAGE"
+        identifier: "INSURANCE_AI_HUB.DATA_QUALITY.DQ_SEMANTIC_VIEW"
+        description: "Conversational root-cause analysis over data quality rules, results, and column health."
   $$;
 
 SHOW MCP SERVERS IN SCHEMA INSURANCE_AI_HUB.PUBLIC;
@@ -41,6 +41,7 @@ DESCRIBE MCP SERVER ENTERPRISE_AI_MCP_SERVER;
 GRANT USAGE ON MCP SERVER ENTERPRISE_AI_MCP_SERVER TO ROLE PUBLIC;
 GRANT SELECT ON SEMANTIC VIEW INSURANCE_AI_HUB.ANALYTICS.ANALYTICS_SEMANTIC_VIEW TO ROLE PUBLIC;
 GRANT USAGE ON CORTEX SEARCH SERVICE INSURANCE_AI_HUB.DOCUMENTS.POLICY_DOCUMENT_SEARCH_SVC TO ROLE PUBLIC;
+GRANT SELECT ON SEMANTIC VIEW INSURANCE_AI_HUB.DATA_QUALITY.DQ_SEMANTIC_VIEW TO ROLE PUBLIC;
 GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE PUBLIC;
 
 -- ----------------------------------------------------------------------------
