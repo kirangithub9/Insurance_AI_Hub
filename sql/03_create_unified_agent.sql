@@ -48,6 +48,7 @@ CREATE OR REPLACE AGENT ENTERPRISE_AI_AGENT
   tool_resources:
     AnalyticsAgent:
       semantic_view: "INSURANCE_AI_HUB.ANALYTICS.ANALYTICS_SEMANTIC_VIEW"
+      warehouse: "COMPUTE_WH"
     DocumentQA:
       search_service: "INSURANCE_AI_HUB.DOCUMENTS.POLICY_DOCUMENT_SEARCH_SVC"
       max_results: "5"
@@ -55,6 +56,7 @@ CREATE OR REPLACE AGENT ENTERPRISE_AI_AGENT
       title_column: "DOCUMENT_TITLE"
     DataQualityAgent:
       semantic_view: "INSURANCE_AI_HUB.DATA_QUALITY.DQ_SEMANTIC_VIEW"
+      warehouse: "COMPUTE_WH"
   $$;
 
 -- Confirm it's registered
