@@ -107,8 +107,34 @@ Streamlit app.
 - `POLICY_DOCUMENTS.CONTENT_TEXT` already holds extracted text (not raw
   PDF/DOCX binaries) — if source documents are still binary, add a
   `SNOWFLAKE.CORTEX.PARSE_DOCUMENT` extraction step upstream of chunking.
-- Warehouse referenced in the Cortex Search service (`COMPUTE_WH`) should be
-  confirmed/sized for the account.
-- Data-quality table columns are assumed from naming convention pending
-  final DDL confirmation; see `sql/04_data_quality_agent.sql` for the exact
-  mapping used.
+- Warehouse referenced in the Cortex Search service (`COMPUTE_WH`) is
+  confirmed against the live account (X-Small, `STARTED`).
+- All `tool_resources` are currently `GRANT`ed to `ROLE PUBLIC` for demo
+  simplicity — a production deployment would scope these to specific roles.
+
+## 6. Resolved during build (previously open items)
+
+- **Data-quality table columns**: `sql/04_data_quality_agent.sql` was
+  originally a draft with guessed column names. All four `DATA_QUALITY`
+  tables (`DQ_RULES`, `DQ_RESULTS`, `DQ_COLUMN_HEALTH`, `DQ_SCORES`) were
+  confirmed directly against the live schema and sample data, and
+  `DQ_SEMANTIC_VIEW` was corrected to match (e.g. `TARGET_TABLE`/
+  `TARGET_COLUMN` instead of `TABLE_NAME`/`COLUMN_NAME` on `DQ_RESULTS`,
+  `STATUS` instead of a boolean `PASS_FLAG`). Verified end-to-end with a
+  live `SEMANTIC_VIEW()` query and through the deployed agent.
+- **Document chunking gap**: the original chunking step only indexed
+  `POLICY_DOCUMENTS.CONTENT_TEXT`, a one-line policy description —
+  the actual exclusion-clause and coverage-limit text lived in separate
+  `EXCLUSION_CLAUSES` / `COVERAGE_SUMMARY` columns that were never
+  chunked, so DocumentQA could not have answered the README's own example
+  question ("what are the exclusion clauses for water damage..."). Fixed
+  by concatenating all three fields before chunking; verified the search
+  service now returns real exclusion-clause text.
+- **Agent warehouse configuration**: `cortex_analyst_text_to_sql` tools
+  (`AnalyticsAgent`, `DataQualityAgent`) require an explicit execution
+  warehouse, nested as `tool_resources.<name>.execution_environment: {
+  type: warehouse, warehouse: <name>, query_timeout: <secs> }` — a flat
+  `warehouse:` key is silently ignored by the agent runtime and produces a
+  generic "missing an execution environment" error regardless of which
+  tool is invoked. Fixed and confirmed live via `DESCRIBE AGENT` and a
+  working end-to-end chat response.
