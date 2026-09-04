@@ -86,9 +86,10 @@ policy type and region), `VW_TREND_ANALYSIS` / `VW_CHURN_TREND`
 the interaction log above).
 
 **MCP Integration.** `ENTERPRISE_AI_MCP_SERVER` (`CREATE MCP SERVER`)
-exposes `ANALYTICS_SEMANTIC_VIEW` and `POLICY_DOCUMENT_SEARCH_SVC` as MCP
-tools, so any MCP-compatible client can query the same data outside the
-Streamlit app.
+exposes `ENTERPRISE_AI_AGENT` itself as a single `CORTEX_AGENT_RUN` MCP
+tool, so any MCP-compatible client (tested live with Claude's Connectors
+UI) gets the same fully-executed, orchestrated answers as the Streamlit
+app — not just generated SQL — across all three capabilities.
 
 ## 4. Why this satisfies the judging criteria
 
@@ -176,3 +177,23 @@ Streamlit app.
   `ACCOUNTADMIN`, which has implicit access to everything). Fixed by
   granting `SELECT` on all `ANALYTICS`/`DATA_QUALITY`/`DOCUMENTS` base
   tables directly to `MCP_CLAUDE_ROLE`.
+- **MCP tool type doesn't execute SQL**: exposing `AnalyticsAgent`/
+  `DataQualityAgent` as raw `CORTEX_ANALYST_MESSAGE` MCP tools only returns
+  the interpreted question and generated SQL text — it does not execute
+  that SQL or return row data. Confirmed live: a real question through
+  Claude's Connectors UI got a SQL statement back and nothing else. Fixed
+  by replacing all three granular tools with a single `CORTEX_AGENT_RUN`
+  tool that proxies the already-working `ENTERPRISE_AI_AGENT` (the same
+  object the Streamlit app calls), which does execute its SQL and returns
+  full natural-language answers — one MCP tool now covers all three
+  capabilities via the agent's own orchestration, matching the "Unified"
+  framing even more directly. Verified end-to-end: a real loss-ratio
+  question returned actual computed numbers, a chart spec, and analysis
+  text, not just a query plan.
+- **Grants don't survive `CREATE OR REPLACE MCP SERVER`**: unlike
+  `CREATE OR REPLACE TABLE`, replacing an MCP server object drops and
+  recreates it, silently clearing every existing `GRANT ... ON MCP SERVER`.
+  Redeploying the server spec without re-running the grants produces the
+  same "does not exist or not authorized" error as a missing grant, even
+  though nothing about the calling role changed. All grants must be
+  re-applied after any redeploy (see `sql/06_create_mcp_server.sql`).

@@ -9,30 +9,40 @@
 USE DATABASE INSURANCE_AI_HUB;
 USE SCHEMA PUBLIC;
 
+-- NOTE: earlier versions of this server exposed AnalyticsAgent/DataQualityAgent
+-- as raw CORTEX_ANALYST_MESSAGE tools. That type only returns the interpreted
+-- question + generated SQL text -- it does NOT execute the SQL or return row
+-- data, which confirmed live via a real Claude Connectors UI question (the
+-- model got a SQL statement back and nothing else). CORTEX_AGENT_RUN instead
+-- proxies the already-working ENTERPRISE_AI_AGENT (same object the Streamlit
+-- app calls), which does execute its generated SQL and returns full
+-- natural-language answers -- so one tool now covers all three capabilities
+-- (analytics, document Q&A, DQ root cause) with the agent's own orchestration
+-- deciding which internally, exactly matching the "Unified" framing.
 CREATE OR REPLACE MCP SERVER ENTERPRISE_AI_MCP_SERVER
   FROM SPECIFICATION $$
     tools:
-      - title: "Enterprise Analytics"
-        name: "analytics_agent"
-        type: "CORTEX_ANALYST_MESSAGE"
-        identifier: "INSURANCE_AI_HUB.ANALYTICS.ANALYTICS_SEMANTIC_VIEW"
-        description: "Natural-language SQL analytics over customers, policies, claims, billing, agents, and at-risk/churn data."
-
-      - title: "Policy Document Search"
-        name: "document_qa"
-        type: "CORTEX_SEARCH_SERVICE_QUERY"
-        identifier: "INSURANCE_AI_HUB.DOCUMENTS.POLICY_DOCUMENT_SEARCH_SVC"
-        description: "Semantic search over insurance policy documents, contracts, and exclusion clauses."
-
-      - title: "Data Quality Root Cause"
-        name: "data_quality_agent"
-        type: "CORTEX_ANALYST_MESSAGE"
-        identifier: "INSURANCE_AI_HUB.DATA_QUALITY.DQ_SEMANTIC_VIEW"
-        description: "Conversational root-cause analysis over data quality rules, results, and column health."
+      - title: "Enterprise AI Agent"
+        name: "enterprise_ai_agent"
+        type: "CORTEX_AGENT_RUN"
+        identifier: "INSURANCE_AI_HUB.PUBLIC.ENTERPRISE_AI_AGENT"
+        description: "Unified enterprise agent: answers natural-language questions about customers, policies, claims, billing, and churn (structured analytics); searches policy documents and exclusion clauses (RAG); and explains data-quality rule failures and root causes -- routes each question to the right capability automatically."
   $$;
 
 SHOW MCP SERVERS IN SCHEMA INSURANCE_AI_HUB.PUBLIC;
 DESCRIBE MCP SERVER ENTERPRISE_AI_MCP_SERVER;
+
+-- GOTCHA: CREATE OR REPLACE MCP SERVER does NOT preserve existing grants on
+-- the object (unlike CREATE OR REPLACE TABLE) -- it's a drop+recreate. Every
+-- GRANT ... ON MCP SERVER below must be re-run after any redeploy of this
+-- CREATE OR REPLACE statement, or callers will get a misleading "does not
+-- exist or not authorized" error even though nothing about their own role
+-- changed. Confirmed by hitting exactly this after an unrelated redeploy.
+
+-- The tool's actual input schema (confirmed via tools/list) takes a single
+-- "text" field, not "message":
+--   {"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+--     {"name":"enterprise_ai_agent","arguments":{"text":"What's our average loss ratio by policy type?"}}}
 
 -- ----------------------------------------------------------------------------
 -- Access for a role that will connect an external MCP client (e.g. Claude,
@@ -50,6 +60,7 @@ GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.ANALYTICS TO ROLE PUBLIC;
 GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.DOCUMENTS TO ROLE PUBLIC;
 GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.DATA_QUALITY TO ROLE PUBLIC;
 GRANT USAGE ON MCP SERVER ENTERPRISE_AI_MCP_SERVER TO ROLE PUBLIC;
+GRANT USAGE ON AGENT ENTERPRISE_AI_AGENT TO ROLE PUBLIC;
 GRANT SELECT ON SEMANTIC VIEW INSURANCE_AI_HUB.ANALYTICS.ANALYTICS_SEMANTIC_VIEW TO ROLE PUBLIC;
 GRANT USAGE ON CORTEX SEARCH SERVICE INSURANCE_AI_HUB.DOCUMENTS.POLICY_DOCUMENT_SEARCH_SVC TO ROLE PUBLIC;
 GRANT SELECT ON SEMANTIC VIEW INSURANCE_AI_HUB.DATA_QUALITY.DQ_SEMANTIC_VIEW TO ROLE PUBLIC;
@@ -103,6 +114,7 @@ GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.ANALYTICS TO ROLE MCP_CLAUDE_ROLE;
 GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.DOCUMENTS TO ROLE MCP_CLAUDE_ROLE;
 GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.DATA_QUALITY TO ROLE MCP_CLAUDE_ROLE;
 GRANT USAGE ON MCP SERVER ENTERPRISE_AI_MCP_SERVER TO ROLE MCP_CLAUDE_ROLE;
+GRANT USAGE ON AGENT ENTERPRISE_AI_AGENT TO ROLE MCP_CLAUDE_ROLE;
 GRANT SELECT ON SEMANTIC VIEW INSURANCE_AI_HUB.ANALYTICS.ANALYTICS_SEMANTIC_VIEW TO ROLE MCP_CLAUDE_ROLE;
 GRANT USAGE ON CORTEX SEARCH SERVICE INSURANCE_AI_HUB.DOCUMENTS.POLICY_DOCUMENT_SEARCH_SVC TO ROLE MCP_CLAUDE_ROLE;
 GRANT SELECT ON SEMANTIC VIEW INSURANCE_AI_HUB.DATA_QUALITY.DQ_SEMANTIC_VIEW TO ROLE MCP_CLAUDE_ROLE;
@@ -160,8 +172,7 @@ CREATE OR REPLACE SECURITY INTEGRATION CLAUDE_MCP_INTEGRATION
 --   Client Secret:         <OAUTH_CLIENT_SECRET from SYSTEM$SHOW_OAUTH_CLIENT_SECRETS>
 -- On connect, Claude opens Snowflake's login page -- sign in as CLAUDE_MCP_USER
 -- (NOT your own admin account), approve the consent screen, and the
--- connector shows the three tools (Enterprise Analytics, Data Quality Root
--- Cause, Policy Document Search) as "Connected".
+-- connector shows "Enterprise AI Agent" as "Connected".
 
 -- Same client id/secret also work for Cursor's mcp.json:
 -- {
