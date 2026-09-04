@@ -74,21 +74,75 @@ GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE PUBLIC;
 -- OAuth is only required for a pre-built client's interactive sign-in flow
 -- (Claude's Connectors UI, Cursor's "Sign in" button) -- those expect a
 -- browser-based auth handshake rather than a token pasted into config.
--- This is the minimum security integration for that case; skip it if you're
--- only proving the server works via the PAT test above.
+-- Skip this whole block if you're only proving the server works via the PAT
+-- test above.
+--
+-- CONFIRMED WORKING SETUP (tested end-to-end with Claude's Connectors UI):
+--
+-- 1. Do NOT point ALLOWED_ROLES_LIST at PUBLIC (or any role) while signing in
+--    as a user that also holds ACCOUNTADMIN/SECURITYADMIN/ORGADMIN. Claude's
+--    connector currently requests "session:role:ALL" (every role the signing-in
+--    user holds, bundled together) rather than a single scoped role -- and
+--    Snowflake hard-blocks ACCOUNTADMIN/SECURITYADMIN/ORGADMIN/GLOBALORGADMIN
+--    from ANY custom OAuth integration, with no way to override it. If the
+--    signing-in user holds one of those roles at all, the whole "ALL" bundle
+--    gets rejected with "The role ALL requested has been explicitly blocked",
+--    even though the specific role you wanted (e.g. PUBLIC) was never blocked.
+--
+-- 2. The fix: create a dedicated role AND a dedicated user that holds ONLY
+--    that role (no admin roles at all), and sign in to the OAuth flow as that
+--    user, not your own admin account.
+--
 -- ----------------------------------------------------------------------------
--- CREATE SECURITY INTEGRATION MCP_OAUTH_INTEGRATION
---   TYPE = OAUTH
---   OAUTH_CLIENT = CUSTOM
---   OAUTH_CLIENT_TYPE = 'CONFIDENTIAL'
---   ENABLED = TRUE
---   OAUTH_REDIRECT_URI = 'https://<your-mcp-client-redirect-uri>'
---   OAUTH_USE_SECONDARY_ROLES = NONE
---   ALLOWED_ROLES_LIST = ('PUBLIC');
---
--- SELECT SYSTEM$SHOW_OAUTH_CLIENT_SECRETS('MCP_OAUTH_INTEGRATION');
---
--- Client (e.g. Cursor) config once you have the client id/secret:
+
+-- Dedicated role scoped to exactly what the MCP server's tools need
+CREATE ROLE IF NOT EXISTS MCP_CLAUDE_ROLE;
+GRANT USAGE ON DATABASE INSURANCE_AI_HUB TO ROLE MCP_CLAUDE_ROLE;
+GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.PUBLIC TO ROLE MCP_CLAUDE_ROLE;
+GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.ANALYTICS TO ROLE MCP_CLAUDE_ROLE;
+GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.DOCUMENTS TO ROLE MCP_CLAUDE_ROLE;
+GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.DATA_QUALITY TO ROLE MCP_CLAUDE_ROLE;
+GRANT USAGE ON MCP SERVER ENTERPRISE_AI_MCP_SERVER TO ROLE MCP_CLAUDE_ROLE;
+GRANT SELECT ON SEMANTIC VIEW INSURANCE_AI_HUB.ANALYTICS.ANALYTICS_SEMANTIC_VIEW TO ROLE MCP_CLAUDE_ROLE;
+GRANT USAGE ON CORTEX SEARCH SERVICE INSURANCE_AI_HUB.DOCUMENTS.POLICY_DOCUMENT_SEARCH_SVC TO ROLE MCP_CLAUDE_ROLE;
+GRANT SELECT ON SEMANTIC VIEW INSURANCE_AI_HUB.DATA_QUALITY.DQ_SEMANTIC_VIEW TO ROLE MCP_CLAUDE_ROLE;
+GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE MCP_CLAUDE_ROLE;
+
+-- Dedicated user that holds ONLY MCP_CLAUDE_ROLE -- never grant this user
+-- ACCOUNTADMIN or any other admin role, or the "ALL roles" block returns.
+-- Set your own password below; do not commit a real one to source control.
+-- CREATE USER IF NOT EXISTS CLAUDE_MCP_USER
+--   PASSWORD = '<choose-a-strong-password-yourself>'
+--   DEFAULT_ROLE = MCP_CLAUDE_ROLE
+--   DEFAULT_WAREHOUSE = COMPUTE_WH
+--   MUST_CHANGE_PASSWORD = FALSE;
+-- GRANT ROLE MCP_CLAUDE_ROLE TO USER CLAUDE_MCP_USER;
+
+CREATE OR REPLACE SECURITY INTEGRATION CLAUDE_MCP_INTEGRATION
+  TYPE = OAUTH
+  OAUTH_CLIENT = CUSTOM
+  OAUTH_CLIENT_TYPE = 'CONFIDENTIAL'
+  ENABLED = TRUE
+  OAUTH_REDIRECT_URI = 'https://claude.ai/api/mcp/auth_callback'
+  OAUTH_USE_SECONDARY_ROLES = NONE
+  ALLOWED_ROLES_LIST = ('MCP_CLAUDE_ROLE');
+
+-- Run this once to get the client id/secret Claude's connector setup asks for
+-- (shown once per rotation -- store it somewhere safe, not in this file):
+-- SELECT SYSTEM$SHOW_OAUTH_CLIENT_SECRETS('CLAUDE_MCP_INTEGRATION');
+
+-- Claude connector setup (claude.ai -> Settings -> Connectors -> Add custom
+-- connector):
+--   Name:                 Insurance AI Hub
+--   Remote MCP server URL: https://<account>.snowflakecomputing.com/api/v2/databases/INSURANCE_AI_HUB/schemas/PUBLIC/mcp-servers/ENTERPRISE_AI_MCP_SERVER
+--   Client ID:             <OAUTH_CLIENT_ID from SYSTEM$SHOW_OAUTH_CLIENT_SECRETS>
+--   Client Secret:         <OAUTH_CLIENT_SECRET from SYSTEM$SHOW_OAUTH_CLIENT_SECRETS>
+-- On connect, Claude opens Snowflake's login page -- sign in as CLAUDE_MCP_USER
+-- (NOT your own admin account), approve the consent screen, and the
+-- connector shows the three tools (Enterprise Analytics, Data Quality Root
+-- Cause, Policy Document Search) as "Connected".
+
+-- Same client id/secret also work for Cursor's mcp.json:
 -- {
 --   "mcpServers": {
 --     "enterprise_ai": {

@@ -138,3 +138,29 @@ Streamlit app.
   generic "missing an execution environment" error regardless of which
   tool is invoked. Fixed and confirmed live via `DESCRIBE AGENT` and a
   working end-to-end chat response.
+- **MCP server access grants**: role `PUBLIC` initially had `USAGE` on the
+  MCP server object, semantic views, search service, and warehouse, but not
+  on the containing `DATABASE`/`SCHEMA`s — the MCP endpoint returned a
+  generic "does not exist or not authorized" error that looked like a
+  missing object rather than a missing grant. Fixed by adding the
+  database/schema `USAGE` grants (see `sql/06_create_mcp_server.sql`).
+- **External MCP client (OAuth) connectivity**: connecting a real external
+  client (tested with Claude's Connectors UI) to `ENTERPRISE_AI_MCP_SERVER`
+  surfaced two more issues, both now resolved and confirmed working
+  end-to-end:
+  1. Claude's connector requests `session:role:ALL` (every role the
+     signing-in user holds, bundled together) rather than a single scoped
+     role. Snowflake hard-blocks `ACCOUNTADMIN`/`SECURITYADMIN`/`ORGADMIN`/
+     `GLOBALORGADMIN` from any custom OAuth integration with no override —
+     so signing in as an admin user fails with "The role ALL requested has
+     been explicitly blocked", even when `ALLOWED_ROLES_LIST` only names a
+     safe role. Fix: create a dedicated Snowflake user holding *only* the
+     scoped `MCP_CLAUDE_ROLE` (no admin roles at all) and sign in as that
+     user instead.
+  2. `ALLOWED_ROLES_LIST` cannot be combined with
+     `OAUTH_USE_SECONDARY_ROLES = IMPLICIT` — use `NONE` with an explicit
+     `ALLOWED_ROLES_LIST` instead.
+  Verified live: the connector shows "Connected" with all three tools
+  (Enterprise Analytics, Data Quality Root Cause, Policy Document Search)
+  listed and callable from a real Claude chat. See the OAuth section of
+  `sql/06_create_mcp_server.sql` for the exact working configuration.
