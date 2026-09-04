@@ -134,14 +134,29 @@ def call_agent(query: str) -> dict:
                     result["sql"] = data.get("input", {}).get("sql")
             elif event_type == "response":
                 for item in data.get("content", []):
-                    if item.get("type") == "text":
+                    item_type = item.get("type")
+                    if item_type == "text":
                         result["text"] += item.get("text", "")
                         for ann in item.get("annotations", []):
                             if ann.get("type") == "cortex_search_citation":
                                 result["citations"].append(ann)
-                    elif item.get("type") == "tool_use":
-                        result["tool_name"] = item.get("name")
-                        result["tool_type"] = item.get("tool_type")
+                    elif item_type == "tool_use":
+                        # The tool's name/type live nested under "tool_use", not
+                        # on the item itself (confirmed against the live API).
+                        # A single question triggers several internal tool_use
+                        # events in sequence (e.g. AnalyticsAgent ->
+                        # system_execute_sql -> server_skill -> data_to_chart);
+                        # only the FIRST one is the actual named capability
+                        # (AnalyticsAgent/DocumentQA/DataQualityAgent) we want
+                        # to show as "via ...", so don't overwrite it once set.
+                        tool_use = item.get("tool_use", {})
+                        tu_name = tool_use.get("name")
+                        tu_type = tool_use.get("type")
+                        if tu_type == "system_execute_sql":
+                            result["sql"] = tool_use.get("input", {}).get("sql")
+                        elif tu_name and not result["tool_name"]:
+                            result["tool_name"] = tu_name
+                            result["tool_type"] = tu_type
 
     except Exception as e:
         result["text"] = f"⚠️ Error calling agent: {e}"
