@@ -37,7 +37,18 @@ DESCRIBE MCP SERVER ENTERPRISE_AI_MCP_SERVER;
 -- ----------------------------------------------------------------------------
 -- Access for a role that will connect an external MCP client (e.g. Claude,
 -- Cursor). Adjust MCP_ACCESS_ROLE / warehouse to match your setup.
+--
+-- NOTE: USAGE on the MCP server / semantic views / search service alone is
+-- NOT enough -- the calling role also needs USAGE on the DATABASE and every
+-- SCHEMA in the path, or the endpoint returns a generic "does not exist or
+-- not authorized" error that looks like a missing object, not a missing
+-- grant. Confirmed by testing directly against the live endpoint.
 -- ----------------------------------------------------------------------------
+GRANT USAGE ON DATABASE INSURANCE_AI_HUB TO ROLE PUBLIC;
+GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.PUBLIC TO ROLE PUBLIC;
+GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.ANALYTICS TO ROLE PUBLIC;
+GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.DOCUMENTS TO ROLE PUBLIC;
+GRANT USAGE ON SCHEMA INSURANCE_AI_HUB.DATA_QUALITY TO ROLE PUBLIC;
 GRANT USAGE ON MCP SERVER ENTERPRISE_AI_MCP_SERVER TO ROLE PUBLIC;
 GRANT SELECT ON SEMANTIC VIEW INSURANCE_AI_HUB.ANALYTICS.ANALYTICS_SEMANTIC_VIEW TO ROLE PUBLIC;
 GRANT USAGE ON CORTEX SEARCH SERVICE INSURANCE_AI_HUB.DOCUMENTS.POLICY_DOCUMENT_SEARCH_SVC TO ROLE PUBLIC;
@@ -45,11 +56,26 @@ GRANT SELECT ON SEMANTIC VIEW INSURANCE_AI_HUB.DATA_QUALITY.DQ_SEMANTIC_VIEW TO 
 GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE PUBLIC;
 
 -- ----------------------------------------------------------------------------
--- OAuth is required for an EXTERNAL MCP client to connect (Snowflake-managed
--- MCP servers use OAuth 2.0, not a plain password/PAT). This is the minimum
--- security integration for Snowflake's own OAuth provider; skip this whole
--- block if you're only demoing the MCP server's existence via SHOW/DESCRIBE
--- and not actually connecting an external client during the demo.
+-- QUICK SMOKE TEST (no OAuth needed): a Programmatic Access Token (PAT) works
+-- as a bearer credential against the MCP endpoint, which is enough to prove
+-- the server responds without wiring up a real external client. Verified
+-- working end-to-end (tools/list + tools/call) against this exact server.
+--
+--   ALTER USER <your_user> ADD PROGRAMMATIC ACCESS TOKEN mcp_demo_token
+--     ROLE_RESTRICTION = 'PUBLIC' DAYS_TO_EXPIRY = 1;
+--   -- copy the returned token_secret, then:
+--   curl -X POST "https://<account>.snowflakecomputing.com/api/v2/databases/INSURANCE_AI_HUB/schemas/PUBLIC/mcp-servers/ENTERPRISE_AI_MCP_SERVER" \
+--     -H "Content-Type: application/json" -H "Accept: application/json" \
+--     -H "Authorization: Bearer <token_secret>" \
+--     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+--   -- clean up afterwards:
+--   ALTER USER <your_user> REMOVE PROGRAMMATIC ACCESS TOKEN mcp_demo_token;
+--
+-- OAuth is only required for a pre-built client's interactive sign-in flow
+-- (Claude's Connectors UI, Cursor's "Sign in" button) -- those expect a
+-- browser-based auth handshake rather than a token pasted into config.
+-- This is the minimum security integration for that case; skip it if you're
+-- only proving the server works via the PAT test above.
 -- ----------------------------------------------------------------------------
 -- CREATE SECURITY INTEGRATION MCP_OAUTH_INTEGRATION
 --   TYPE = OAUTH
