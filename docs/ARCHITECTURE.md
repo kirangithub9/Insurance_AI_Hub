@@ -164,3 +164,15 @@ Streamlit app.
   (Enterprise Analytics, Data Quality Root Cause, Policy Document Search)
   listed and callable from a real Claude chat. See the OAuth section of
   `sql/06_create_mcp_server.sql` for the exact working configuration.
+- **Semantic view base-table access**: `GRANT SELECT ON SEMANTIC VIEW` does
+  *not* implicitly grant access to the view's underlying base tables —
+  Cortex Analyst's generated SQL runs with the calling role's own
+  table-level privileges (invoker's rights), not the semantic view owner's.
+  `MCP_CLAUDE_ROLE` had `SELECT` on `ANALYTICS_SEMANTIC_VIEW` but not on
+  `CUSTOMERS`/`POLICIES`/`CLAIMS`/etc. directly, so a real question through
+  the external Claude connector failed with a generic authorization error
+  even though the semantic view grant looked sufficient. This only surfaces
+  when testing as a non-admin role (every earlier test ran as
+  `ACCOUNTADMIN`, which has implicit access to everything). Fixed by
+  granting `SELECT` on all `ANALYTICS`/`DATA_QUALITY`/`DOCUMENTS` base
+  tables directly to `MCP_CLAUDE_ROLE`.
