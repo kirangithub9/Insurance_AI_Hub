@@ -176,9 +176,12 @@ with tab3:
                 st.markdown("**Queries by tool (Streamlit only)**")
                 st.bar_chart(acc.set_index("TOOL_NAME")["TOTAL_QUERIES"])
             with right:
-                st.markdown("**Helpful rate by tool**")
-                st.bar_chart(acc.set_index("TOOL_NAME")["HELPFUL_RATE"])
-
+                st.markdown("**Helpful Rate by Tool**")
+                feedback_display = acc.set_index("TOOL_NAME")[["THUMBS_UP", "THUMBS_DOWN"]].copy()
+                feedback_display["HELPFUL_RATE"] = feedback_display.apply(
+                    lambda r: f"👍 {int(r['THUMBS_UP'])}   👎 {int(r['THUMBS_DOWN'])}", axis=1
+                )
+                st.dataframe(feedback_display[["HELPFUL_RATE"]], use_container_width=True)
             usage = load("SELECT * FROM INSURANCE_AI_HUB.PUBLIC.VW_AGENT_USAGE_OVER_TIME ORDER BY DAY")
             if not usage.empty:
                 st.markdown("**Query volume over time (Streamlit only)**")
