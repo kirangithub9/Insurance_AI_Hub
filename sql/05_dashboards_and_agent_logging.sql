@@ -95,7 +95,7 @@ SELECT
   COUNT_IF(HELPFUL_FLAG = TRUE)                                   AS thumbs_up,
   COUNT_IF(HELPFUL_FLAG = FALSE)                                  AS thumbs_down,
   COUNT_IF(HELPFUL_FLAG IS NOT NULL)                              AS total_rated,
-  DIV0(COUNT_IF(HELPFUL_FLAG = TRUE), COUNT_IF(HELPFUL_FLAG IS NOT NULL)) AS helpful_rate,
+  COUNT_IF(HELPFUL_FLAG = TRUE) / NULLIF(COUNT_IF(HELPFUL_FLAG IS NOT NULL), 0) AS helpful_rate,
   AVG(LATENCY_MS)                                                 AS avg_latency_ms
 FROM AGENT_INTERACTION_LOG
 GROUP BY TOOL_NAME;
