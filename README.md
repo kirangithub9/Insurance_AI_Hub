@@ -28,6 +28,7 @@ sql/
   04_data_quality_agent.sql               Agent 3 — DQ semantic view + agent tool update
   05_dashboards_and_agent_logging.sql     Snowflake Intelligence dashboards + interaction log
   06_create_mcp_server.sql                MCP Integration — exposes tools as an MCP server
+  07_unified_agent_observability.sql      Unified usage view (Streamlit + MCP) via native AI Observability
 streamlit/
   app.py                                  Chat UI (Streamlit-in-Snowflake), logs every interaction
   pages/1_Dashboard.py                    Portfolio/risk, trend, and agent-accuracy dashboard
@@ -56,7 +57,13 @@ docs/
    dashboard reads from.
 7. Run `sql/06_create_mcp_server.sql` — creates `ENTERPRISE_AI_MCP_SERVER`
    (MCP Integration requirement).
-8. In Snowsight: **Streamlit > + Streamlit App**, point it at `streamlit/app.py`
+8. Run `sql/07_unified_agent_observability.sql` — creates `VW_AGENT_OBSERVABILITY_CALLS`,
+   `VW_AGENT_USAGE_ALL_CHANNELS`, and `VW_AGENT_CHANNEL_SPLIT`, which read Snowflake's
+   native `SNOWFLAKE.LOCAL.GET_AI_OBSERVABILITY_EVENTS` so the dashboard can show usage
+   from MCP callers too, not just Streamlit. The role running the Streamlit app needs
+   `GRANT DATABASE ROLE SNOWFLAKE.CORTEX_USER` and `GRANT MONITOR ON AGENT
+   ENTERPRISE_AI_AGENT` first (see comment at the top of that file).
+9. In Snowsight: **Streamlit > + Streamlit App**, point it at `streamlit/app.py`
    (with `streamlit/pages/1_Dashboard.py` alongside it for the multipage
    dashboard) inside `INSURANCE_AI_HUB.PUBLIC`, attach `environment.yml`, and run.
    Ask it a few questions first so the dashboard's "Agent Accuracy & Usage"

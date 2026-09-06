@@ -100,7 +100,62 @@ with tab2:
 # ---------------------------------------------------------------------------
 with tab3:
     st.subheader("Agent Accuracy & Usage")
-    st.caption("Sourced from AGENT_INTERACTION_LOG — populates as people use the chat app.")
+
+    st.markdown("#### Usage — all channels (Streamlit + MCP)")
+    st.caption(
+        "Sourced from Snowflake's native SNOWFLAKE.LOCAL.GET_AI_OBSERVABILITY_EVENTS — "
+        "captures every call to ENTERPRISE_AI_AGENT regardless of caller, including "
+        "questions asked through the MCP connector (claude.ai, Cursor, etc.), which "
+        "AGENT_INTERACTION_LOG below never sees. Requires sql/07_unified_agent_observability.sql."
+    )
+    try:
+        split = load("SELECT * FROM INSURANCE_AI_HUB.PUBLIC.VW_AGENT_CHANNEL_SPLIT")
+        if split.empty:
+            st.info("No observability events yet — ask the agent a few questions first (either channel).")
+        else:
+            total_all = int(split["QUERY_COUNT"].sum())
+            mcp_total = int(split.loc[split["CHANNEL"] == "MCP", "QUERY_COUNT"].sum())
+            direct_total = total_all - mcp_total
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Total Queries (all channels)", total_all)
+            c2.metric("via Streamlit/Direct", direct_total)
+            c3.metric("via MCP", mcp_total)
+
+            left, right = st.columns(2)
+            with left:
+                st.markdown("**Queries by tool (all channels)**")
+                by_tool = split.groupby("TOOL_NAME")["QUERY_COUNT"].sum()
+                st.bar_chart(by_tool)
+            with right:
+                st.markdown("**Queries by channel**")
+                by_channel = split.groupby("CHANNEL")["QUERY_COUNT"].sum()
+                st.bar_chart(by_channel)
+
+            usage_all = load("SELECT * FROM INSURANCE_AI_HUB.PUBLIC.VW_AGENT_USAGE_ALL_CHANNELS ORDER BY DAY")
+            if not usage_all.empty:
+                st.markdown("**Query volume over time, by channel**")
+                pivot_channel = usage_all.pivot_table(
+                    index="DAY", columns="CHANNEL", values="QUERY_COUNT", aggfunc="sum"
+                ).fillna(0)
+                st.line_chart(pivot_channel)
+
+            with st.expander("Raw channel-split data"):
+                st.dataframe(split, use_container_width=True)
+    except Exception as e:
+        st.warning(
+            f"Couldn't load unified observability metrics — has "
+            f"sql/07_unified_agent_observability.sql been run, and does the role "
+            f"running this app have SNOWFLAKE.CORTEX_USER + MONITOR on the agent? ({e})"
+        )
+
+    st.divider()
+    st.markdown("#### Accuracy — Streamlit only")
+    st.caption(
+        "Sourced from AGENT_INTERACTION_LOG. Helpful-rate feedback (👍/👎) only exists "
+        "for the Streamlit chat UI — the MCP connector has no feedback mechanism, so "
+        "this section can't include MCP traffic."
+    )
     try:
         acc = load("SELECT * FROM INSURANCE_AI_HUB.PUBLIC.VW_AGENT_ACCURACY_METRICS")
         if acc.empty:
@@ -112,13 +167,13 @@ with tab3:
             overall_helpful = (thumbs_up / total_rated) if total_rated else None
 
             c1, c2, c3 = st.columns(3)
-            c1.metric("Total Queries", total_q)
+            c1.metric("Total Queries (Streamlit)", total_q)
             c2.metric("Feedback Given", total_rated)
             c3.metric("Helpful Rate", f"{overall_helpful:.0%}" if overall_helpful is not None else "—")
 
             left, right = st.columns(2)
             with left:
-                st.markdown("**Queries by tool**")
+                st.markdown("**Queries by tool (Streamlit only)**")
                 st.bar_chart(acc.set_index("TOOL_NAME")["TOTAL_QUERIES"])
             with right:
                 st.markdown("**Helpful rate by tool**")
@@ -126,7 +181,7 @@ with tab3:
 
             usage = load("SELECT * FROM INSURANCE_AI_HUB.PUBLIC.VW_AGENT_USAGE_OVER_TIME ORDER BY DAY")
             if not usage.empty:
-                st.markdown("**Query volume over time**")
+                st.markdown("**Query volume over time (Streamlit only)**")
                 pivot = usage.pivot(index="DAY", columns="TOOL_NAME", values="QUERY_COUNT").fillna(0)
                 st.line_chart(pivot)
 
