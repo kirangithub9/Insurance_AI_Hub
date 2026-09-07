@@ -34,6 +34,7 @@ sql/
   07_unified_agent_observability.sql      Unified usage view (Streamlit + MCP) via native AI Observability
   08_dq_agent_enhancements.sql            DQ_COLUMN_HEALTH history backfill + DQ_DOWNSTREAM_IMPACT lineage table, closing two Agent 3 example-question gaps found against the authoritative requirement doc
   09_rename_agent_tools.sql               Renames tool_spec.name to the requirement doc's exact wording and backfills historical AGENT_INTERACTION_LOG rows to match
+  10_reset_observability_baseline.sql     Resets the "Usage — all channels" dashboard counters by adding a cutoff to VW_AGENT_OBSERVABILITY_CALLS (re-run with a fresh MAX(TIMESTAMP) baseline any time, e.g. before a demo)
 streamlit/
   app.py                                  Chat UI (Streamlit-in-Snowflake), logs every interaction
   pages/1_Dashboard.py                    Portfolio/risk, trend, and agent-accuracy dashboard
