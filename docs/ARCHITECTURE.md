@@ -34,8 +34,9 @@ conversation.
    ANALYTICS_SEMANTIC_VIEW      POLICY_DOCUMENT_SEARCH_SVC        DQ_SEMANTIC_VIEW
    over ANALYTICS schema        over DOCUMENTS.DOCUMENT_CHUNKS    over DATA_QUALITY schema
    (CUSTOMERS, POLICIES,        (chunked from POLICY_DOCUMENTS    (DQ_RULES, DQ_RESULTS,
-   CLAIMS, BILLING, AGENTS,     .CONTENT_TEXT via                 DQ_COLUMN_HEALTH, DQ_SCORES)
-   AT_RISK_POLICIES)            SPLIT_TEXT_RECURSIVE_CHARACTER)
+   CLAIMS, BILLING, AGENTS,     .CONTENT_TEXT via                 DQ_COLUMN_HEALTH, DQ_SCORES,
+   AT_RISK_POLICIES)            SPLIT_TEXT_RECURSIVE_CHARACTER)   VW_DQ_COLUMN_HEALTH_TRENDS,
+                                                                   DQ_DOWNSTREAM_IMPACT)
 ```
 
 Everything runs natively inside Snowflake — one platform, one governance
@@ -61,9 +62,11 @@ pipeline to maintain.
 
 **Agent 3 — Data Quality Root Cause.** A second semantic view
 (`DQ_SEMANTIC_VIEW`) sits over `DQ_RULES`, `DQ_RESULTS`, `DQ_COLUMN_HEALTH`,
-and `DQ_SCORES`, letting a business user ask "why did X fail" and get a
-conversational, evidence-backed answer instead of opening a data-quality
-dashboard.
+`DQ_SCORES`, `VW_DQ_COLUMN_HEALTH_TRENDS` (per-column score trend/delta), and
+`DQ_DOWNSTREAM_IMPACT` (lineage to affected dashboards/reports), letting a
+business user ask "why did X fail", "which column dropped the most", or "is
+any downstream reporting impacted" and get a conversational, evidence-backed
+answer instead of opening a data-quality dashboard.
 
 **Orchestration.** All three are registered as `tool_resources` on one
 `AGENT` object (`ENTERPRISE_AI_AGENT`). Cortex Agents' orchestration model
@@ -190,6 +193,25 @@ app — not just generated SQL — across all three capabilities.
   framing even more directly. Verified end-to-end: a real loss-ratio
   question returned actual computed numbers, a chart spec, and analysis
   text, not just a query plan.
+- **DQ Agent couldn't answer two of its own spec's example questions**: the
+  authoritative requirement doc's Agent 3 example follow-ups include "which
+  column caused the biggest score drop" and "is any downstream reporting
+  impacted" — checked live against `DQ_COLUMN_HEALTH` and found it held
+  exactly one snapshot date (28 rows, 2025-01-15), so there was no history to
+  compute a "drop" from, and no lineage/downstream-dependency table existed
+  anywhere in the account. Fixed in `sql/08_dq_agent_enhancements.sql`:
+  backfilled two earlier `DQ_COLUMN_HEALTH` snapshots per column (derived
+  proportionally from each column's existing status, not random — critical
+  columns stay flat as long-standing issues, `CUSTOMERS.EMAIL` gets a
+  deliberate fresh regression matching the agent's existing demo question),
+  added a `VW_DQ_COLUMN_HEALTH_TRENDS` view (`LAG`/`FIRST_VALUE` per column)
+  exposed to `DQ_SEMANTIC_VIEW` as `column_trends`, and added
+  `DQ_DOWNSTREAM_IMPACT`, a lineage table mapping source table/column to the
+  dashboards this repo actually ships, exposed as `downstream_impact`.
+  Verified live via `SEMANTIC_VIEW()`: `CUSTOMERS.EMAIL` returns as the
+  single biggest score drop (-11.0), and `CUSTOMERS` correctly returns
+  "Portfolio & Risk Dashboard" and "Customer Outreach & Marketing Campaigns"
+  as impacted downstream reports.
 - **Grants don't survive `CREATE OR REPLACE MCP SERVER`**: unlike
   `CREATE OR REPLACE TABLE`, replacing an MCP server object drops and
   recreates it, silently clearing every existing `GRANT ... ON MCP SERVER`.

@@ -181,7 +181,9 @@ with st.sidebar:
         "- *Which agents have the highest performance rating?*\n"
         "- *How much revenue is at risk from high-churn customers?*\n"
         "- *What are the exclusion clauses for water damage in policy POL-1023?*\n"
-        "- *Why did the DQ check on CUSTOMERS.EMAIL fail last week?*"
+        "- *Why did the DQ check on CUSTOMERS.EMAIL fail last week?*\n"
+        "- *Which column caused the biggest data quality score drop?*\n"
+        "- *Is any downstream reporting impacted by the CUSTOMERS data quality issues?*"
     )
     if st.button("Clear conversation"):
         st.session_state.messages = []

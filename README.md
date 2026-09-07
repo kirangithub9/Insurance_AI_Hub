@@ -29,6 +29,7 @@ sql/
   05_dashboards_and_agent_logging.sql     Snowflake Intelligence dashboards + interaction log
   06_create_mcp_server.sql                MCP Integration — exposes tools as an MCP server
   07_unified_agent_observability.sql      Unified usage view (Streamlit + MCP) via native AI Observability
+  08_dq_agent_enhancements.sql            DQ_COLUMN_HEALTH history backfill + DQ_DOWNSTREAM_IMPACT lineage table, closing two Agent 3 example-question gaps found against the authoritative requirement doc
 streamlit/
   app.py                                  Chat UI (Streamlit-in-Snowflake), logs every interaction
   pages/1_Dashboard.py                    Portfolio/risk, trend, and agent-accuracy dashboard
@@ -49,7 +50,10 @@ docs/
 3. Run `sql/02_document_search_agent2.sql` — chunks `POLICY_DOCUMENTS.CONTENT_TEXT`
    into `DOCUMENT_CHUNKS` and creates the `POLICY_DOCUMENT_SEARCH_SVC` Cortex
    Search service.
-4. Run `sql/04_data_quality_agent.sql` — creates the DQ semantic view.
+4. Run `sql/08_dq_agent_enhancements.sql`, then `sql/04_data_quality_agent.sql`
+   — 08 backfills DQ_COLUMN_HEALTH history and creates DQ_DOWNSTREAM_IMPACT
+   (needed for the "biggest score drop" / "downstream reporting impacted"
+   questions), then 04 creates the DQ semantic view referencing both.
 5. Run `sql/03_create_unified_agent.sql` — creates `ENTERPRISE_AI_AGENT` with
    all three tools wired up.
 6. Run `sql/05_dashboards_and_agent_logging.sql` — creates the portfolio/risk,
