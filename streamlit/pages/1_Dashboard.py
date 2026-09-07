@@ -29,6 +29,16 @@ def load(query: str):
     return session.sql(query).to_pandas()
 
 
+# Sanitized tool_spec.name values the agent runtime actually returns (spaces
+# -> "_", "&" dropped -- see sql/03_create_unified_agent.sql) mapped to short
+# display labels for charts/tables. Matches TOOL_LABELS in streamlit/app.py.
+TOOL_DISPLAY_NAMES = {
+    "Self-Service_Analytics_Agent": "Self-Service Analytics",
+    "Document_Q_A_Agent": "Document Q&A",
+    "Data_Quality_Agent": "Data Quality",
+}
+
+
 st.title("📊 Enterprise AI Agent — Dashboard")
 st.caption(
     "Portfolio & risk, trend analysis, and agent accuracy/usage — the "
@@ -143,7 +153,7 @@ with tab3:
             left, right = st.columns(2)
             with left:
                 st.markdown("**Queries by tool (all channels)**")
-                by_tool = split.groupby("TOOL_NAME")["QUERY_COUNT"].sum()
+                by_tool = split.groupby("TOOL_NAME")["QUERY_COUNT"].sum().rename(index=TOOL_DISPLAY_NAMES)
                 st.bar_chart(by_tool)
             with right:
                 st.markdown("**Queries by channel**")
@@ -192,18 +202,21 @@ with tab3:
             left, right = st.columns(2)
             with left:
                 st.markdown("**Queries by tool (Streamlit only)**")
-                st.bar_chart(acc.set_index("TOOL_NAME")["TOTAL_QUERIES"])
+                by_tool_sl = acc.set_index("TOOL_NAME")["TOTAL_QUERIES"].rename(index=TOOL_DISPLAY_NAMES)
+                st.bar_chart(by_tool_sl)
             with right:
                 st.markdown("**Helpful Rate by Tool**")
                 feedback_display = acc.set_index("TOOL_NAME")[["THUMBS_UP", "THUMBS_DOWN"]].copy()
                 feedback_display["HELPFUL_RATE"] = feedback_display.apply(
                     lambda r: f"👍 {int(r['THUMBS_UP'])}   👎 {int(r['THUMBS_DOWN'])}", axis=1
                 )
+                feedback_display = feedback_display.rename(index=TOOL_DISPLAY_NAMES)
                 st.dataframe(feedback_display[["HELPFUL_RATE"]], use_container_width=True)
             usage = load("SELECT * FROM INSURANCE_AI_HUB.PUBLIC.VW_AGENT_USAGE_OVER_TIME ORDER BY DAY")
             if not usage.empty:
                 st.markdown("**Query volume over time (Streamlit only)**")
                 pivot = usage.pivot(index="DAY", columns="TOOL_NAME", values="QUERY_COUNT").fillna(0)
+                pivot = pivot.rename(columns=TOOL_DISPLAY_NAMES)
                 st.line_chart(pivot)
 
             with st.expander("Raw accuracy data"):
