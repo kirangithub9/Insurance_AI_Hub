@@ -43,9 +43,23 @@ with tab1:
     st.subheader("Portfolio & Risk by Policy Type / Region")
     try:
         df = load("SELECT * FROM INSURANCE_AI_HUB.ANALYTICS.VW_PORTFOLIO_RISK_DASHBOARD")
+
+        # VW_PORTFOLIO_RISK_DASHBOARD is pre-grouped by policy_type/plan_tier/
+        # region, each with its own AVG_LOSS_RATIO and POLICY_COUNT. A plain
+        # .mean() across those subgroup averages is a mean-of-means that
+        # silently under/over-weights unevenly-sized groups; weight by
+        # POLICY_COUNT instead for the portfolio-wide figure. Fully
+        # vectorized (no groupby.apply) to stay compatible across pandas
+        # versions.
+        df["_WEIGHTED_LR"] = df["AVG_LOSS_RATIO"] * df["POLICY_COUNT"]
+
+        def weighted_loss_ratio(frame):
+            total_policies = frame["POLICY_COUNT"].sum()
+            return frame["_WEIGHTED_LR"].sum() / total_policies if total_policies else 0.0
+
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Total Premium", f"${df['TOTAL_PREMIUM'].sum():,.0f}")
-        c2.metric("Avg Loss Ratio", f"{df['AVG_LOSS_RATIO'].mean():.2f}")
+        c2.metric("Portfolio Loss Ratio", f"{weighted_loss_ratio(df):.1%}")
         c3.metric("Total Revenue at Risk", f"${df['TOTAL_REVENUE_AT_RISK'].sum():,.0f}")
         c4.metric("Fraud-Flagged Claims", f"{int(df['FRAUD_CLAIM_COUNT'].sum())}")
 
@@ -54,14 +68,18 @@ with tab1:
             st.markdown("**Total premium by policy type**")
             st.bar_chart(df.groupby("POLICY_TYPE")["TOTAL_PREMIUM"].sum())
         with right:
-            st.markdown("**Avg loss ratio by policy type**")
-            st.bar_chart(df.groupby("POLICY_TYPE")["AVG_LOSS_RATIO"].mean())
+            st.markdown("**Loss ratio by policy type**")
+            lr_by_type = (
+                df.groupby("POLICY_TYPE")["_WEIGHTED_LR"].sum()
+                / df.groupby("POLICY_TYPE")["POLICY_COUNT"].sum()
+            )
+            st.bar_chart(lr_by_type)
 
         st.markdown("**Revenue at risk by region**")
         st.bar_chart(df.groupby("REGION")["TOTAL_REVENUE_AT_RISK"].sum())
 
         with st.expander("Raw data"):
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df.drop(columns=["_WEIGHTED_LR"]), use_container_width=True)
     except Exception as e:
         st.warning(f"Couldn't load portfolio dashboard — has sql/05_dashboards_and_agent_logging.sql been run? ({e})")
 
