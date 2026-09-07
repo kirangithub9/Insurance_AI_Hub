@@ -35,6 +35,7 @@ sql/
   08_dq_agent_enhancements.sql            DQ_COLUMN_HEALTH history backfill + DQ_DOWNSTREAM_IMPACT lineage table, closing two Agent 3 example-question gaps found against the authoritative requirement doc
   09_rename_agent_tools.sql               Renames tool_spec.name to the requirement doc's exact wording and backfills historical AGENT_INTERACTION_LOG rows to match
   10_reset_observability_baseline.sql     Resets the "Usage — all channels" dashboard counters by adding a cutoff to VW_AGENT_OBSERVABILITY_CALLS (re-run with a fresh MAX(TIMESTAMP) baseline any time, e.g. before a demo)
+  11_multi_tool_attribution_fix.sql       Fixes multi-tool questions being silently attributed to only one tool; adds VW_AGENT_CALLS_SUMMARY for un-inflated call totals
 streamlit/
   app.py                                  Chat UI (Streamlit-in-Snowflake), logs every interaction
   pages/1_Dashboard.py                    Portfolio/risk, trend, and agent-accuracy dashboard
@@ -78,6 +79,12 @@ docs/
    dashboard) inside `INSURANCE_AI_HUB.PUBLIC`, attach `environment.yml`, and run.
    Ask it a few questions first so the dashboard's "Agent Accuracy & Usage"
    tab has data to show.
+
+   **Note**: this app is Snowsight-managed (not git-integrated), so a code
+   change in this repo does NOT automatically reach the deployed app — after
+   pulling changes to `streamlit/app.py` or `streamlit/pages/1_Dashboard.py`,
+   open the app in Snowsight and click **Edit** to paste in the updated file
+   contents, or it'll keep running the old code.
 
 ## Judging criteria mapping
 

@@ -62,11 +62,19 @@ TOOL_LABELS = {
 def log_interaction(log_id: str, question: str, result: dict, latency_ms: int) -> None:
     """Write one row per question/answer to AGENT_INTERACTION_LOG for the
     Snowflake Intelligence usage/accuracy dashboard. Best-effort — a logging
-    failure should never break the chat experience."""
+    failure should never break the chat experience.
+
+    TOOL_NAME stores a comma-joined list when the agent used more than one
+    tool for this question (e.g. "Document_Q_A_Agent,Self-Service_Analytics_Agent")
+    -- confirmed live that a single question can legitimately invoke multiple
+    named tools. sql/11_multi_tool_attribution_fix.sql splits this back out
+    per tool for the "Queries by tool" / "Helpful Rate by Tool" breakdowns,
+    while this row itself still represents ONE real interaction for
+    "Total Queries" / "Feedback Given" purposes."""
     try:
         q = question.replace("'", "''")
         resp = (result.get("text") or "").replace("'", "''")[:15000]
-        tool = result.get("tool_name") or "Unknown"
+        tool = ",".join(result.get("tool_names") or []) or "Unknown"
         had_sql = bool(result.get("sql"))
         had_citations = bool(result.get("citations"))
         session.sql(
@@ -101,7 +109,7 @@ def call_agent(query: str) -> dict:
         "stream": False,
     }
 
-    result = {"text": "", "tool_name": None, "tool_type": None, "sql": None, "citations": []}
+    result = {"text": "", "tool_names": [], "sql": None, "citations": []}
 
     try:
         if IS_SIS:
@@ -136,8 +144,9 @@ def call_agent(query: str) -> dict:
             if event_type in ("response.text.delta",):
                 result["text"] += data.get("text", "")
             elif event_type == "response.tool_use":
-                result["tool_name"] = data.get("name")
-                result["tool_type"] = data.get("type")
+                name = data.get("name")
+                if name and name not in result["tool_names"]:
+                    result["tool_names"].append(name)
                 if data.get("type") == "cortex_analyst_text_to_sql":
                     result["sql"] = data.get("input", {}).get("sql")
             elif event_type == "response":
@@ -152,20 +161,24 @@ def call_agent(query: str) -> dict:
                         # The tool's name/type live nested under "tool_use", not
                         # on the item itself (confirmed against the live API).
                         # A single question triggers several internal tool_use
-                        # events in sequence (e.g. Self-Service_Analytics_Agent ->
-                        # system_execute_sql -> server_skill -> data_to_chart);
-                        # only the FIRST one is the actual named capability
+                        # events (e.g. Document_Q_A_Agent, Self-Service_Analytics_Agent,
+                        # then pipeline steps like system_execute_sql/server_skill/
+                        # data_to_chart). Collect every *named capability*
                         # (Self-Service_Analytics_Agent/Document_Q_A_Agent/
-                        # Data_Quality_Agent) we want to show as "via ...", so
-                        # don't overwrite it once set.
+                        # Data_Quality_Agent) actually used -- a single question
+                        # can legitimately invoke more than one (confirmed live:
+                        # "What are the top friction points causing claim
+                        # delays in Q1?" used both Document_Q_A_Agent AND
+                        # Self-Service_Analytics_Agent). Internal pipeline step
+                        # names (system_execute_sql, server_skill, data_to_chart)
+                        # are not real capabilities and are excluded.
                         tool_use = item.get("tool_use", {})
                         tu_name = tool_use.get("name")
                         tu_type = tool_use.get("type")
                         if tu_type == "system_execute_sql":
                             result["sql"] = tool_use.get("input", {}).get("sql")
-                        elif tu_name and not result["tool_name"]:
-                            result["tool_name"] = tu_name
-                            result["tool_type"] = tu_type
+                        elif tu_name in TOOL_LABELS and tu_name not in result["tool_names"]:
+                            result["tool_names"].append(tu_name)
 
     except Exception as e:
         result["text"] = f"⚠️ Error calling agent: {e}"
@@ -202,8 +215,9 @@ st.session_state.setdefault("messages", [])
 
 for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
-        if msg.get("tool_name"):
-            st.caption(f"via {TOOL_LABELS.get(msg['tool_name'], msg['tool_name'])}")
+        if msg.get("tool_names"):
+            labels = " + ".join(TOOL_LABELS.get(t, t) for t in msg["tool_names"])
+            st.caption(f"via {labels}")
         st.markdown(msg["content"])
         if msg.get("sql"):
             with st.expander("Generated SQL"):
@@ -234,8 +248,9 @@ if user_input:
             result = call_agent(user_input)
             latency_ms = int((time.time() - start) * 1000)
 
-        if result.get("tool_name"):
-            st.caption(f"via {TOOL_LABELS.get(result['tool_name'], result['tool_name'])}")
+        if result.get("tool_names"):
+            labels = " + ".join(TOOL_LABELS.get(t, t) for t in result["tool_names"])
+            st.caption(f"via {labels}")
         st.markdown(result["text"] or "_No response text returned._")
         if result.get("sql"):
             with st.expander("Generated SQL"):
@@ -252,7 +267,7 @@ if user_input:
         {
             "role": "assistant",
             "content": result["text"],
-            "tool_name": result.get("tool_name"),
+            "tool_names": result.get("tool_names"),
             "sql": result.get("sql"),
             "citations": result.get("citations"),
             "log_id": log_id,
