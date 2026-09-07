@@ -33,7 +33,7 @@ each one against what this use case actually needs:
 | Category (from doc) | Retail-boilerplate example (doesn't apply here) | What we built instead |
 |---|---|---|
 | AI/SQL | — | Cortex Analyst semantic views (`ANALYTICS_SEMANTIC_VIEW`, `DQ_SEMANTIC_VIEW`) generate governed SQL from natural language |
-| Cortex Agents | Product matching / price optimization / market intelligence agents | Three tools unified in one `AGENT` object: **AnalyticsAgent** (structured data), **DocumentQA** (RAG over policy documents), **DataQualityAgent** (conversational DQ root cause) — directly matching the three capabilities named in our actual problem statement |
+| Cortex Agents | Product matching / price optimization / market intelligence agents | Three tools unified in one `AGENT` object, named to match the requirement doc exactly: **Self-Service Analytics Agent** (structured data), **Document Q&A Agent** (RAG over policy documents), **Data Quality Agent** (conversational DQ root cause) — directly matching the three capabilities named in our actual problem statement |
 | Snowflake Intelligence | Competitive pricing dashboard / market trend analysis / matching accuracy metrics | **Portfolio & risk dashboard** (premium, loss ratio, revenue at risk by segment) / **Claims & churn trend analysis** (month-over-month) / **Agent accuracy & usage metrics** (query volume by tool, 👍/👎 helpful rate, latency) — the same three dashboard *shapes*, translated to data that exists in this project |
 | MCP Integration ("as applicable") | — | `CREATE MCP SERVER` exposing the semantic views and search service as MCP tools, so any MCP client (Claude, Cursor, etc.) can query the platform directly — genuinely applicable since these are already Cortex objects |
 
@@ -49,8 +49,17 @@ boilerplate block above. It defines exactly three agents: **Self-Service
 Analytics Agent**, **Document Q&A Agent (RAG)**, **Data Quality Agent** — with
 zero mention of product matching, price optimization, or market intelligence
 agents anywhere in it. This confirms the mapping above was correct, not a
-substitution to defend: `AnalyticsAgent`/`DocumentQA`/`DataQualityAgent` *are*
-the literal ask.
+substitution to defend: **Self-Service Analytics Agent** / **Document Q&A
+Agent** / **Data Quality Agent** *are* the literal ask — and
+`sql/03_create_unified_agent.sql`'s `tool_spec.name` values were renamed
+from the original compact identifiers (`AnalyticsAgent`/`DocumentQA`/
+`DataQualityAgent`) to that exact wording, confirmed live end-to-end
+(see `docs/ARCHITECTURE.md`, "Resolved during build"). Note the agent
+runtime sanitizes spaces/`&` to underscores in anything it actually
+*returns* (`tool_use.name`, logs, traces) — `Self-Service_Analytics_Agent` /
+`Document_Q_A_Agent` / `Data_Quality_Agent` — so that sanitized form is what
+appears in `AGENT_INTERACTION_LOG` and the observability views, while the
+agent's own definition carries the exact requirement-doc wording.
 
 Every example question in that doc was checked against the live schema
 (`UIGXFIN-WB39887`), not assumed:

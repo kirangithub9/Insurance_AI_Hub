@@ -180,6 +180,6 @@ SELECT * FROM SEMANTIC_VIEW(
 
 -- ----------------------------------------------------------------------------
 -- Once this view is verified working, add it to the unified agent by
--- uncommenting the DataQualityAgent block in 03_create_unified_agent.sql
+-- uncommenting the "Data Quality Agent" block in 03_create_unified_agent.sql
 -- and re-running that script (CREATE OR REPLACE AGENT is idempotent).
 -- ----------------------------------------------------------------------------

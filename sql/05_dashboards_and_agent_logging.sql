@@ -78,7 +78,7 @@ USE SCHEMA PUBLIC;
 CREATE TABLE IF NOT EXISTS AGENT_INTERACTION_LOG (
   LOG_ID          VARCHAR(36)      DEFAULT UUID_STRING(),
   QUESTION        VARCHAR(2000),
-  TOOL_NAME       VARCHAR(50),      -- AnalyticsAgent | DocumentQA | DataQualityAgent
+  TOOL_NAME       VARCHAR(50),      -- Self-Service_Analytics_Agent | Document_Q_A_Agent | Data_Quality_Agent (sanitized tool_spec.name -- see sql/03_create_unified_agent.sql)
   RESPONSE_TEXT   VARCHAR(16777216),
   HAD_SQL         BOOLEAN DEFAULT FALSE,
   HAD_CITATIONS   BOOLEAN DEFAULT FALSE,

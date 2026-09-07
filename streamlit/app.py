@@ -4,9 +4,14 @@ Snowflake Hackathon (Capgemini x Snowflake)
 
 Single chat UI that talks to the ENTERPRISE_AI_AGENT (Cortex Agent), which
 internally routes each question to whichever tool fits:
-  - AnalyticsAgent   -> Cortex Analyst semantic view (structured data)
-  - DocumentQA       -> Cortex Search service (policy documents / RAG)
-  - DataQualityAgent -> Cortex Analyst semantic view over DATA_QUALITY (root cause)
+  - Self-Service Analytics Agent -> Cortex Analyst semantic view (structured data)
+  - Document Q&A Agent           -> Cortex Search service (policy documents / RAG)
+  - Data Quality Agent           -> Cortex Analyst semantic view over DATA_QUALITY (root cause)
+
+Tool names match the requirement doc word-for-word in sql/03_create_unified_agent.sql,
+but the agent runtime sanitizes spaces/"&" to underscores in anything it actually
+returns (tool_use.name, logs, traces) -- see TOOL_LABELS below, which maps those
+sanitized identifiers back to the doc's exact display text.
 
 Deploy this as a Streamlit-in-Snowflake app (Snowsight > Streamlit > + Streamlit App)
 inside the INSURANCE_AI_HUB database / PUBLIC schema, on any warehouse.
@@ -44,10 +49,13 @@ SCHEMA_NAME = "PUBLIC"
 AGENT_NAME = "ENTERPRISE_AI_AGENT"
 AGENT_ENDPOINT = f"/api/v2/databases/{DB_NAME}/schemas/{SCHEMA_NAME}/agents/{AGENT_NAME}:run"
 
+# Keys are the sanitized identifiers the agent runtime actually returns
+# (spaces -> "_", "&" dropped) for tool_spec.name values that contain them --
+# confirmed live against ENTERPRISE_AI_AGENT's real tool_use responses.
 TOOL_LABELS = {
-    "AnalyticsAgent": "📊 Self-Service Analytics",
-    "DocumentQA": "📄 Document Q&A",
-    "DataQualityAgent": "🛡️ Data Quality Root Cause",
+    "Self-Service_Analytics_Agent": "📊 Self-Service Analytics Agent",
+    "Document_Q_A_Agent": "📄 Document Q&A Agent",
+    "Data_Quality_Agent": "🛡️ Data Quality Agent",
 }
 
 
@@ -144,11 +152,12 @@ def call_agent(query: str) -> dict:
                         # The tool's name/type live nested under "tool_use", not
                         # on the item itself (confirmed against the live API).
                         # A single question triggers several internal tool_use
-                        # events in sequence (e.g. AnalyticsAgent ->
+                        # events in sequence (e.g. Self-Service_Analytics_Agent ->
                         # system_execute_sql -> server_skill -> data_to_chart);
                         # only the FIRST one is the actual named capability
-                        # (AnalyticsAgent/DocumentQA/DataQualityAgent) we want
-                        # to show as "via ...", so don't overwrite it once set.
+                        # (Self-Service_Analytics_Agent/Document_Q_A_Agent/
+                        # Data_Quality_Agent) we want to show as "via ...", so
+                        # don't overwrite it once set.
                         tool_use = item.get("tool_use", {})
                         tu_name = tool_use.get("name")
                         tu_type = tool_use.get("type")

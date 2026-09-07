@@ -12,32 +12,40 @@ conversation.
 ## 2. High-level architecture
 
 ```
-                         ┌─────────────────────────────┐
-                         │   Streamlit-in-Snowflake     │
-                         │        Chat UI (app.py)      │
-                         └───────────────┬──────────────┘
-                                         │ REST: agents/{name}:run
-                                         ▼
-                         ┌─────────────────────────────┐
-                         │   ENTERPRISE_AI_AGENT         │
-                         │   (Snowflake Cortex Agent)    │
-                         │   auto-orchestration / routing│
-                         └───┬─────────────┬────────────┘
-              ┌──────────────┘             │             └──────────────┐
-              ▼                            ▼                            ▼
-   ┌────────────────────┐     ┌────────────────────────┐   ┌─────────────────────────┐
-   │  AnalyticsAgent     │     │   DocumentQA             │   │  DataQualityAgent        │
-   │  Cortex Analyst     │     │   Cortex Search Service  │   │  Cortex Analyst          │
-   │  (text-to-SQL)      │     │   (RAG, auto-embeddings) │   │  (text-to-SQL)           │
-   └─────────┬───────────┘     └───────────┬──────────────┘   └────────────┬─────────────┘
-             ▼                             ▼                               ▼
-   ANALYTICS_SEMANTIC_VIEW      POLICY_DOCUMENT_SEARCH_SVC        DQ_SEMANTIC_VIEW
-   over ANALYTICS schema        over DOCUMENTS.DOCUMENT_CHUNKS    over DATA_QUALITY schema
-   (CUSTOMERS, POLICIES,        (chunked from POLICY_DOCUMENTS    (DQ_RULES, DQ_RESULTS,
-   CLAIMS, BILLING, AGENTS,     .CONTENT_TEXT via                 DQ_COLUMN_HEALTH, DQ_SCORES,
-   AT_RISK_POLICIES)            SPLIT_TEXT_RECURSIVE_CHARACTER)   VW_DQ_COLUMN_HEALTH_TRENDS,
-                                                                   DQ_DOWNSTREAM_IMPACT)
+                                        ┌────────────────────────────────┐
+                                        │     Streamlit-in-Snowflake     │
+                                        │        Chat UI (app.py)        │
+                                        └────────────────────────────────┘
+                                                         │ REST: agents/{name}:run
+                                                         ▼
+                                        ┌────────────────────────────────┐
+                                        │      ENTERPRISE_AI_AGENT       │
+                                        │    (Snowflake Cortex Agent)    │
+                                        │  auto-orchestration / routing  │
+                                        └────────────────────────────────┘
+                                                         │
+                  ┌──────────────────────────────────────┬──────────────────────────────────────┐
+                  ▼                                      ▼                                      ▼
+┌──────────────────────────────────┐   ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+│   Self-Service Analytics Agent   │   │        Document Q&A Agent        │   │        Data Quality Agent        │
+│          Cortex Analyst          │   │      Cortex Search Service       │   │          Cortex Analyst          │
+│          (text-to-SQL)           │   │      (RAG, auto-embeddings)      │   │          (text-to-SQL)           │
+└──────────────────────────────────┘   └──────────────────────────────────┘   └──────────────────────────────────┘
+                  ▼                                      ▼                                      ▼
+ANALYTICS_SEMANTIC_VIEW                POLICY_DOCUMENT_SEARCH_SVC             DQ_SEMANTIC_VIEW
+over ANALYTICS schema                  over DOCUMENTS.DOCUMENT_CHUNKS         over DATA_QUALITY schema
+(CUSTOMERS, POLICIES,                  (chunked from POLICY_DOCUMENTS         (DQ_RULES, DQ_RESULTS,
+CLAIMS, BILLING, AGENTS,               .CONTENT_TEXT via                      DQ_COLUMN_HEALTH, DQ_SCORES,
+AT_RISK_POLICIES)                      SPLIT_TEXT_RECURSIVE_CHARACTER)        VW_DQ_COLUMN_HEALTH_TRENDS,
+                                                                              DQ_DOWNSTREAM_IMPACT)
 ```
+
+Tool names above are the exact wording from the requirement doc
+(`tool_spec.name` in `sql/03_create_unified_agent.sql`). The agent runtime
+sanitizes spaces/`&` to underscores in anything it actually returns
+(`tool_use.name`, logs, traces): `Self-Service_Analytics_Agent`,
+`Document_Q_A_Agent`, `Data_Quality_Agent` — confirmed live, see the
+"Resolved during build" note below.
 
 Everything runs natively inside Snowflake — one platform, one governance
 boundary, no data leaves the account and no external vector database or
@@ -212,6 +220,26 @@ app — not just generated SQL — across all three capabilities.
   single biggest score drop (-11.0), and `CUSTOMERS` correctly returns
   "Portfolio & Risk Dashboard" and "Customer Outreach & Marketing Campaigns"
   as impacted downstream reports.
+- **Tool names renamed to match the requirement doc exactly, but the runtime
+  sanitizes them**: the tools were originally named `AnalyticsAgent`/
+  `DocumentQA`/`DataQualityAgent` (compact identifiers). To match the
+  authoritative requirement doc word-for-word, first confirmed live (via a
+  disposable throwaway agent, dropped immediately after) that Cortex Agent's
+  `tool_spec.name` field accepts spaces and punctuation, then renamed to
+  `"Self-Service Analytics Agent"` / `"Document Q&A Agent"` / `"Data Quality
+  Agent"` in `sql/03_create_unified_agent.sql` and redeployed. However, the
+  agent runtime sanitizes the name in everything it actually returns
+  (`tool_use.name`, `AGENT_INTERACTION_LOG.TOOL_NAME`, observability span
+  names): spaces become `_` and `&` is dropped, so the values seen at runtime
+  are `Self-Service_Analytics_Agent` / `Document_Q_A_Agent` /
+  `Data_Quality_Agent` — confirmed by calling the live agent post-rename and
+  inspecting both the direct API response and real
+  `GET_AI_OBSERVABILITY_EVENTS` rows. Updated `streamlit/app.py`'s
+  `TOOL_LABELS` and `sql/07_unified_agent_observability.sql`'s
+  `REGEXP_SUBSTR` pattern to the sanitized identifiers, and backfilled the
+  11 pre-existing `AGENT_INTERACTION_LOG` rows from the old names to the new
+  ones so the usage/accuracy dashboard doesn't split history across a rename
+  (see `sql/09_rename_agent_tools.sql`).
 - **Grants don't survive `CREATE OR REPLACE MCP SERVER`**: unlike
   `CREATE OR REPLACE TABLE`, replacing an MCP server object drops and
   recreates it, silently clearing every existing `GRANT ... ON MCP SERVER`.

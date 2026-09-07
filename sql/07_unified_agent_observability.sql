@@ -8,11 +8,19 @@
 -- Snowflake's native SNOWFLAKE.LOCAL.GET_AI_OBSERVABILITY_EVENTS captures
 -- every call to the agent regardless of caller. Confirmed live against this
 -- project's real traces:
---   - The chosen tool's literal name (AnalyticsAgent/DocumentQA/
---     DataQualityAgent) always appears as a suffix on a child span's name
---     (e.g. "SemanticContextTool_AnalyticsAgent", "CortexSearchService_
---     DocumentQA") -- regardless of prefix, so REGEXP_SUBSTR pulls it out
---     generically.
+--   - The tool_spec.name in 03_create_unified_agent.sql is the exact wording
+--     from the requirement doc ("Self-Service Analytics Agent" / "Document
+--     Q&A Agent" / "Data Quality Agent"), but the agent runtime SANITIZES it
+--     for anything it actually returns (tool_use.name, span names, this
+--     table): spaces become underscores and "&" is dropped, so the values
+--     that actually appear are Self-Service_Analytics_Agent /
+--     Document_Q_A_Agent / Data_Quality_Agent. Confirmed by calling the live
+--     agent post-rename and inspecting real GET_AI_OBSERVABILITY_EVENTS rows
+--     (e.g. "SemanticContextTool_Self-Service_Analytics_Agent",
+--     "CortexSearchService_Document_Q_A_Agent") -- the sanitized name always
+--     appears as a suffix on a child span's name regardless of prefix, so
+--     REGEXP_SUBSTR pulls it out generically. streamlit/app.py's TOOL_LABELS
+--     maps these sanitized identifiers back to the doc's exact display text.
 --   - RESOURCE_ATTRIBUTES:"snow.user.name" distinguishes CLAUDE_MCP_USER
 --     (the dedicated MCP connector user, see 06_create_mcp_server.sql) from
 --     every other caller, which for this project means Streamlit/Snowsight.
@@ -37,9 +45,9 @@ WITH events AS (
 tool_spans AS (
   SELECT
     TRACE:trace_id::STRING AS trace_id,
-    REGEXP_SUBSTR(RECORD:name::STRING, 'AnalyticsAgent|DocumentQA|DataQualityAgent') AS tool_name
+    REGEXP_SUBSTR(RECORD:name::STRING, 'Self-Service_Analytics_Agent|Document_Q_A_Agent|Data_Quality_Agent') AS tool_name
   FROM events
-  WHERE REGEXP_SUBSTR(RECORD:name::STRING, 'AnalyticsAgent|DocumentQA|DataQualityAgent') IS NOT NULL
+  WHERE REGEXP_SUBSTR(RECORD:name::STRING, 'Self-Service_Analytics_Agent|Document_Q_A_Agent|Data_Quality_Agent') IS NOT NULL
   QUALIFY ROW_NUMBER() OVER (PARTITION BY trace_id ORDER BY tool_name) = 1
 ),
 trace_bounds AS (

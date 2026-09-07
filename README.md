@@ -7,11 +7,14 @@ A single conversational agent — built entirely on Snowflake Cortex — that le
 business users ask natural-language questions across three domains without
 writing SQL, using a BI tool, or filing a ticket with a data team:
 
+Tool names match the authoritative requirement doc ("Snowflake Cortex AI
+Agents – Unified Business Enablement") word-for-word:
+
 | Tool | Powered by | Answers questions like |
 |---|---|---|
-| **AnalyticsAgent** | Cortex Analyst (semantic view) | "What's our average loss ratio by policy type?" |
-| **DocumentQA** | Cortex Search (RAG) | "What are the exclusion clauses for water damage in policy POL-1023?" |
-| **DataQualityAgent** | Cortex Analyst (semantic view) | "Why did the DQ check on CUSTOMERS.EMAIL fail last week?" |
+| **Self-Service Analytics Agent** | Cortex Analyst (semantic view) | "What's our average loss ratio by policy type?" |
+| **Document Q&A Agent** | Cortex Search (RAG) | "What are the exclusion clauses for water damage in policy POL-1023?" |
+| **Data Quality Agent** | Cortex Analyst (semantic view) | "Why did the DQ check on CUSTOMERS.EMAIL fail last week?" |
 
 All three are exposed as **tools of one Cortex Agent** (`ENTERPRISE_AI_AGENT`),
 which is the point of the "Unified" framing — one chat box, automatic routing
@@ -30,6 +33,7 @@ sql/
   06_create_mcp_server.sql                MCP Integration — exposes tools as an MCP server
   07_unified_agent_observability.sql      Unified usage view (Streamlit + MCP) via native AI Observability
   08_dq_agent_enhancements.sql            DQ_COLUMN_HEALTH history backfill + DQ_DOWNSTREAM_IMPACT lineage table, closing two Agent 3 example-question gaps found against the authoritative requirement doc
+  09_rename_agent_tools.sql               Renames tool_spec.name to the requirement doc's exact wording and backfills historical AGENT_INTERACTION_LOG rows to match
 streamlit/
   app.py                                  Chat UI (Streamlit-in-Snowflake), logs every interaction
   pages/1_Dashboard.py                    Portfolio/risk, trend, and agent-accuracy dashboard
@@ -55,7 +59,8 @@ docs/
    (needed for the "biggest score drop" / "downstream reporting impacted"
    questions), then 04 creates the DQ semantic view referencing both.
 5. Run `sql/03_create_unified_agent.sql` — creates `ENTERPRISE_AI_AGENT` with
-   all three tools wired up.
+   all three tools wired up, then `sql/09_rename_agent_tools.sql` if you have
+   pre-existing `AGENT_INTERACTION_LOG` rows from an older tool-naming scheme.
 6. Run `sql/05_dashboards_and_agent_logging.sql` — creates the portfolio/risk,
    trend, and agent-accuracy views plus the `AGENT_INTERACTION_LOG` table the
    dashboard reads from.
