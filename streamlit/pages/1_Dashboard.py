@@ -137,19 +137,12 @@ with tab3:
         "AGENT_INTERACTION_LOG below never sees. Requires sql/08_unified_agent_observability.sql."
     )
     try:
-        # VW_AGENT_CHANNEL_SPLIT is exploded one row per (call, tool) -- a
-        # question that used 2 tools contributes to both tools' counts, by
-        # design (sql/08_unified_agent_observability.sql). That's correct for
-        # "Queries by tool" but would double-count a multi-tool question in
-        # totals/by-channel, so those use VW_AGENT_CALLS_SUMMARY instead,
-        # which has exactly one row per real call.
         split = load("SELECT * FROM INSURANCE_AI_HUB.PUBLIC.VW_AGENT_CHANNEL_SPLIT")
-        calls = load("SELECT * FROM INSURANCE_AI_HUB.PUBLIC.VW_AGENT_CALLS_SUMMARY")
-        if calls.empty:
+        if split.empty:
             st.info("No observability events yet — ask the agent a few questions first (either channel).")
         else:
-            total_all = len(calls)
-            mcp_total = int((calls["CHANNEL"] == "MCP").sum())
+            total_all = int(split["QUERY_COUNT"].sum())
+            mcp_total = int(split.loc[split["CHANNEL"] == "MCP", "QUERY_COUNT"].sum())
             direct_total = total_all - mcp_total
 
             c1, c2, c3 = st.columns(3)
@@ -164,34 +157,19 @@ with tab3:
                 st.bar_chart(by_tool)
             with right:
                 st.markdown("**Queries by channel**")
-                by_channel = calls.groupby("CHANNEL").size()
+                by_channel = split.groupby("CHANNEL")["QUERY_COUNT"].sum()
                 st.bar_chart(by_channel)
 
-            # By-channel time series uses calls (not the tool-exploded view)
-            # for the same reason as the totals above.
-            calls_ts = calls.copy()
-            calls_ts["DAY"] = calls_ts["STARTED_AT"].dt.date
-            pivot_channel = calls_ts.pivot_table(
-                index="DAY", columns="CHANNEL", values="TRACE_ID", aggfunc="count"
-            ).fillna(0)
-            if not pivot_channel.empty:
-                st.markdown("**Query volume over time, by channel**")
-                st.line_chart(pivot_channel)
-
-            # By-tool time series is fine to use the exploded view -- a
-            # multi-tool question correctly contributing to each tool it used.
             usage_all = load("SELECT * FROM INSURANCE_AI_HUB.PUBLIC.VW_AGENT_USAGE_ALL_CHANNELS ORDER BY DAY")
             if not usage_all.empty:
-                st.markdown("**Query volume over time, by tool**")
-                pivot_tool = usage_all.pivot_table(
-                    index="DAY", columns="TOOL_NAME", values="QUERY_COUNT", aggfunc="sum"
-                ).fillna(0).rename(columns=TOOL_DISPLAY_NAMES)
-                st.line_chart(pivot_tool)
+                st.markdown("**Query volume over time, by channel**")
+                pivot_channel = usage_all.pivot_table(
+                    index="DAY", columns="CHANNEL", values="QUERY_COUNT", aggfunc="sum"
+                ).fillna(0)
+                st.line_chart(pivot_channel)
 
-            with st.expander("Raw channel-split data (by tool, multi-attributed)"):
+            with st.expander("Raw channel-split data"):
                 st.dataframe(split, use_container_width=True)
-            with st.expander("Raw call data (one row per call)"):
-                st.dataframe(calls, use_container_width=True)
     except Exception as e:
         st.warning(
             f"Couldn't load unified observability metrics — has "
@@ -207,24 +185,13 @@ with tab3:
         "this section can't include MCP traffic."
     )
     try:
-        # acc (VW_AGENT_ACCURACY_METRICS) is exploded one row per (question,
-        # tool) -- correct for the by-tool breakdown below, but a question
-        # that used 2 tools would double-count in a naive sum(). The top-line
-        # totals instead come straight from AGENT_INTERACTION_LOG, which has
-        # exactly one row per real question.
-        summary = load(
-            "SELECT COUNT(*) AS TOTAL_QUERIES, "
-            "COUNT_IF(HELPFUL_FLAG IS NOT NULL) AS TOTAL_RATED, "
-            "COUNT_IF(HELPFUL_FLAG = TRUE) AS THUMBS_UP "
-            "FROM INSURANCE_AI_HUB.PUBLIC.AGENT_INTERACTION_LOG"
-        )
         acc = load("SELECT * FROM INSURANCE_AI_HUB.PUBLIC.VW_AGENT_ACCURACY_METRICS")
-        if summary.empty or int(summary["TOTAL_QUERIES"].iloc[0]) == 0:
+        if acc.empty:
             st.info("No agent interactions logged yet — ask the chat app a few questions first.")
         else:
-            total_q = int(summary["TOTAL_QUERIES"].iloc[0])
-            total_rated = int(summary["TOTAL_RATED"].iloc[0])
-            thumbs_up = int(summary["THUMBS_UP"].iloc[0])
+            total_q = int(acc["TOTAL_QUERIES"].sum())
+            total_rated = int(acc["TOTAL_RATED"].sum())
+            thumbs_up = int(acc["THUMBS_UP"].sum())
             overall_helpful = (thumbs_up / total_rated) if total_rated else None
 
             c1, c2, c3 = st.columns(3)

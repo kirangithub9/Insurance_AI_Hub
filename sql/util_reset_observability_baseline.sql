@@ -35,12 +35,7 @@
 -- reference frame as the column being filtered.
 --
 -- IMPORTANT: this redefines VW_AGENT_OBSERVABILITY_CALLS, so it must stay in
--- sync with sql/08_unified_agent_observability.sql's tool_spans logic
--- (DISTINCT trace/tool pairs -- a trace using N tools contributes N rows).
--- An earlier version of this reset script still had the old QUALIFY
--- ROW_NUMBER()=1 single-tool-per-trace collapse and would have silently
--- reintroduced that bug if re-run after the fix -- keep this file's
--- tool_spans CTE identical to sql/08's.
+-- sync with sql/08_unified_agent_observability.sql's tool_spans logic.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -68,14 +63,12 @@ WITH events AS (
   WHERE TIMESTAMP >= '<PASTE STEP 1 RESULT + 1 SECOND HERE>'::TIMESTAMP_NTZ  -- e.g. '2026-09-07 13:01:44'::TIMESTAMP_NTZ
 ),
 tool_spans AS (
-  -- DISTINCT (trace_id, tool_name) pairs -- no QUALIFY/ROW_NUMBER collapse,
-  -- so a trace that used N tools contributes N rows here. Must match
-  -- sql/08_unified_agent_observability.sql.
-  SELECT DISTINCT
+  SELECT
     TRACE:trace_id::STRING AS trace_id,
     REGEXP_SUBSTR(RECORD:name::STRING, 'Self-Service_Analytics_Agent|Document_Q_A_Agent|Data_Quality_Agent') AS tool_name
   FROM events
   WHERE REGEXP_SUBSTR(RECORD:name::STRING, 'Self-Service_Analytics_Agent|Document_Q_A_Agent|Data_Quality_Agent') IS NOT NULL
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY trace_id ORDER BY tool_name) = 1
 ),
 trace_bounds AS (
   SELECT
@@ -98,10 +91,9 @@ SELECT
 FROM trace_bounds b
 JOIN tool_spans t ON t.trace_id = b.trace_id;
 
--- VW_AGENT_USAGE_ALL_CHANNELS, VW_AGENT_CHANNEL_SPLIT, and
--- VW_AGENT_CALLS_SUMMARY (sql/08) all reference VW_AGENT_OBSERVABILITY_CALLS
--- by name, not a frozen snapshot -- they automatically reflect this reset,
--- no need to redefine them here.
+-- VW_AGENT_USAGE_ALL_CHANNELS and VW_AGENT_CHANNEL_SPLIT (sql/08) reference
+-- VW_AGENT_OBSERVABILITY_CALLS by name, not a frozen snapshot -- they
+-- automatically reflect this reset, no need to redefine them here.
 
 -- Sanity check: should be empty immediately after reset
 SELECT * FROM VW_AGENT_OBSERVABILITY_CALLS ORDER BY started_at DESC LIMIT 20;

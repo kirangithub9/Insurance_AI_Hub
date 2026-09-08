@@ -69,10 +69,10 @@ docs/
 7. Run `sql/07_create_mcp_server.sql` — creates `ENTERPRISE_AI_MCP_SERVER`
    (MCP Integration requirement).
 8. Run `sql/08_unified_agent_observability.sql` — creates `VW_AGENT_OBSERVABILITY_CALLS`,
-   `VW_AGENT_USAGE_ALL_CHANNELS`, `VW_AGENT_CHANNEL_SPLIT`, and `VW_AGENT_CALLS_SUMMARY`,
-   which read Snowflake's native `SNOWFLAKE.LOCAL.GET_AI_OBSERVABILITY_EVENTS` so the
-   dashboard can show usage from MCP callers too, not just Streamlit. The role running
-   the Streamlit app needs `GRANT DATABASE ROLE SNOWFLAKE.CORTEX_USER` and `GRANT
+   `VW_AGENT_USAGE_ALL_CHANNELS`, and `VW_AGENT_CHANNEL_SPLIT`, which read Snowflake's
+   native `SNOWFLAKE.LOCAL.GET_AI_OBSERVABILITY_EVENTS` so the dashboard can show usage
+   from MCP callers too, not just Streamlit. The role running the Streamlit app needs
+   `GRANT DATABASE ROLE SNOWFLAKE.CORTEX_USER` and `GRANT
    MONITOR ON AGENT ENTERPRISE_AI_AGENT` first (see comment at the top of that file).
 9. In Snowsight: **Streamlit > + Streamlit App**, point it at `streamlit/app.py`
    (with `streamlit/pages/1_Dashboard.py` alongside it for the multipage
