@@ -32,9 +32,10 @@
 --      so "biggest score drop" is a plain ORDER BY on a semantic-view fact
 --      rather than a window function embedded in the semantic view DDL.
 --
--- Run this AFTER sql/04_data_quality_agent.sql (needs DQ_COLUMN_HEALTH to
--- exist) and BEFORE re-running sql/04_data_quality_agent.sql's updated
--- DQ_SEMANTIC_VIEW (which now includes column_trends and downstream_impact).
+-- Run this AFTER the base DATA_QUALITY tables exist (DQ_RULES, DQ_RESULTS,
+-- DQ_COLUMN_HEALTH, DQ_SCORES -- part of the pre-provisioned dataset) and
+-- BEFORE sql/04_data_quality_agent.sql, whose DQ_SEMANTIC_VIEW references
+-- the column_trends/downstream_impact objects this script creates.
 -- ============================================================================
 
 USE DATABASE INSURANCE_AI_HUB;
@@ -114,7 +115,7 @@ ORDER BY CHECK_DATE;
 -- ----------------------------------------------------------------------------
 -- 2. DOWNSTREAM LINEAGE: which reports/dashboards depend on which table/column
 -- Rows reference dashboards that actually exist in this repo
--- (sql/05_dashboards_and_agent_logging.sql), not invented product data.
+-- (sql/06_dashboards_and_agent_logging.sql), not invented product data.
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE TABLE DQ_DOWNSTREAM_IMPACT (
   DOWNSTREAM_ID   VARCHAR(20)  PRIMARY KEY,

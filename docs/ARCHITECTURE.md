@@ -41,7 +41,7 @@ AT_RISK_POLICIES)                      SPLIT_TEXT_RECURSIVE_CHARACTER)        VW
 ```
 
 Tool names above are the exact wording from the requirement doc
-(`tool_spec.name` in `sql/03_create_unified_agent.sql`). The agent runtime
+(`tool_spec.name` in `sql/05_create_unified_agent.sql`). The agent runtime
 sanitizes spaces/`&` to underscores in anything it actually returns
 (`tool_use.name`, logs, traces): `Self-Service_Analytics_Agent`,
 `Document_Q_A_Agent`, `Data_Quality_Agent` — confirmed live, see the
@@ -155,7 +155,7 @@ app — not just generated SQL — across all three capabilities.
   on the containing `DATABASE`/`SCHEMA`s — the MCP endpoint returned a
   generic "does not exist or not authorized" error that looked like a
   missing object rather than a missing grant. Fixed by adding the
-  database/schema `USAGE` grants (see `sql/06_create_mcp_server.sql`).
+  database/schema `USAGE` grants (see `sql/07_create_mcp_server.sql`).
 - **External MCP client (OAuth) connectivity**: connecting a real external
   client (tested with Claude's Connectors UI) to `ENTERPRISE_AI_MCP_SERVER`
   surfaced two more issues, both now resolved and confirmed working
@@ -175,7 +175,7 @@ app — not just generated SQL — across all three capabilities.
   Verified live: the connector shows "Connected" with all three tools
   (Enterprise Analytics, Data Quality Root Cause, Policy Document Search)
   listed and callable from a real Claude chat. See the OAuth section of
-  `sql/06_create_mcp_server.sql` for the exact working configuration.
+  `sql/07_create_mcp_server.sql` for the exact working configuration.
 - **Semantic view base-table access**: `GRANT SELECT ON SEMANTIC VIEW` does
   *not* implicitly grant access to the view's underlying base tables —
   Cortex Analyst's generated SQL runs with the calling role's own
@@ -207,7 +207,7 @@ app — not just generated SQL — across all three capabilities.
   impacted" — checked live against `DQ_COLUMN_HEALTH` and found it held
   exactly one snapshot date (28 rows, 2025-01-15), so there was no history to
   compute a "drop" from, and no lineage/downstream-dependency table existed
-  anywhere in the account. Fixed in `sql/08_dq_agent_enhancements.sql`:
+  anywhere in the account. Fixed in `sql/03_dq_agent_enhancements.sql`:
   backfilled two earlier `DQ_COLUMN_HEALTH` snapshots per column (derived
   proportionally from each column's existing status, not random — critical
   columns stay flat as long-standing issues, `CUSTOMERS.EMAIL` gets a
@@ -227,7 +227,7 @@ app — not just generated SQL — across all three capabilities.
   disposable throwaway agent, dropped immediately after) that Cortex Agent's
   `tool_spec.name` field accepts spaces and punctuation, then renamed to
   `"Self-Service Analytics Agent"` / `"Document Q&A Agent"` / `"Data Quality
-  Agent"` in `sql/03_create_unified_agent.sql` and redeployed. However, the
+  Agent"` in `sql/05_create_unified_agent.sql` and redeployed. However, the
   agent runtime sanitizes the name in everything it actually returns
   (`tool_use.name`, `AGENT_INTERACTION_LOG.TOOL_NAME`, observability span
   names): spaces become `_` and `&` is dropped, so the values seen at runtime
@@ -235,15 +235,17 @@ app — not just generated SQL — across all three capabilities.
   `Data_Quality_Agent` — confirmed by calling the live agent post-rename and
   inspecting both the direct API response and real
   `GET_AI_OBSERVABILITY_EVENTS` rows. Updated `streamlit/app.py`'s
-  `TOOL_LABELS` and `sql/07_unified_agent_observability.sql`'s
+  `TOOL_LABELS` and `sql/08_unified_agent_observability.sql`'s
   `REGEXP_SUBSTR` pattern to the sanitized identifiers, and backfilled the
   11 pre-existing `AGENT_INTERACTION_LOG` rows from the old names to the new
-  ones so the usage/accuracy dashboard doesn't split history across a rename
-  (see `sql/09_rename_agent_tools.sql`).
+  ones (a one-time backfill migration on the live account, since folded away
+  — every setup script now creates the final tool names from the start, so a
+  fresh deployment never needs this step) so the usage/accuracy dashboard
+  didn't split history across the rename.
 - **Grants don't survive `CREATE OR REPLACE MCP SERVER`**: unlike
   `CREATE OR REPLACE TABLE`, replacing an MCP server object drops and
   recreates it, silently clearing every existing `GRANT ... ON MCP SERVER`.
   Redeploying the server spec without re-running the grants produces the
   same "does not exist or not authorized" error as a missing grant, even
   though nothing about the calling role changed. All grants must be
-  re-applied after any redeploy (see `sql/06_create_mcp_server.sql`).
+  re-applied after any redeploy (see `sql/07_create_mcp_server.sql`).

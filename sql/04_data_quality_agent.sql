@@ -13,7 +13,7 @@
 --   DQ_COLUMN_HEALTH.HEALTH_STATUS -> 'Healthy' | 'Warning' | 'Critical'
 --   DQ_SCORES.TREND          -> 'UP' | 'DOWN' | 'STABLE'
 --
--- DEPENDS ON sql/08_dq_agent_enhancements.sql having been run first: this
+-- DEPENDS ON sql/03_dq_agent_enhancements.sql having been run first: this
 -- view now also includes column_trends (VW_DQ_COLUMN_HEALTH_TRENDS) and
 -- downstream_impact (DQ_DOWNSTREAM_IMPACT), added to answer two example
 -- questions from the requirement doc that DQ_COLUMN_HEALTH/DQ_RULES/
@@ -180,6 +180,6 @@ SELECT * FROM SEMANTIC_VIEW(
 
 -- ----------------------------------------------------------------------------
 -- Once this view is verified working, add it to the unified agent by
--- uncommenting the "Data Quality Agent" block in 03_create_unified_agent.sql
+-- uncommenting the "Data Quality Agent" block in 05_create_unified_agent.sql
 -- and re-running that script (CREATE OR REPLACE AGENT is idempotent).
 -- ----------------------------------------------------------------------------

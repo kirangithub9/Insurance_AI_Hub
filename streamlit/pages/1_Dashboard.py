@@ -8,7 +8,7 @@ pricing in this schema, so this shows the insurance/enterprise-ops
 equivalents instead: portfolio & risk, claims/churn trend, and agent
 accuracy/usage (sourced from AGENT_INTERACTION_LOG, written by app.py).
 
-Requires sql/05_dashboards_and_agent_logging.sql to have been run first.
+Requires sql/06_dashboards_and_agent_logging.sql to have been run first.
 """
 
 import streamlit as st
@@ -30,7 +30,7 @@ def load(query: str):
 
 
 # Sanitized tool_spec.name values the agent runtime actually returns (spaces
-# -> "_", "&" dropped -- see sql/03_create_unified_agent.sql) mapped to short
+# -> "_", "&" dropped -- see sql/05_create_unified_agent.sql) mapped to short
 # display labels for charts/tables. Matches TOOL_LABELS in streamlit/app.py.
 TOOL_DISPLAY_NAMES = {
     "Self-Service_Analytics_Agent": "Self-Service Analytics",
@@ -91,7 +91,7 @@ with tab1:
         with st.expander("Raw data"):
             st.dataframe(df.drop(columns=["_WEIGHTED_LR"]), use_container_width=True)
     except Exception as e:
-        st.warning(f"Couldn't load portfolio dashboard — has sql/05_dashboards_and_agent_logging.sql been run? ({e})")
+        st.warning(f"Couldn't load portfolio dashboard — has sql/06_dashboards_and_agent_logging.sql been run? ({e})")
 
 # ---------------------------------------------------------------------------
 with tab2:
@@ -134,12 +134,12 @@ with tab3:
         "Sourced from Snowflake's native SNOWFLAKE.LOCAL.GET_AI_OBSERVABILITY_EVENTS — "
         "captures every call to ENTERPRISE_AI_AGENT regardless of caller, including "
         "questions asked through the MCP connector (claude.ai, Cursor, etc.), which "
-        "AGENT_INTERACTION_LOG below never sees. Requires sql/07_unified_agent_observability.sql."
+        "AGENT_INTERACTION_LOG below never sees. Requires sql/08_unified_agent_observability.sql."
     )
     try:
         # VW_AGENT_CHANNEL_SPLIT is exploded one row per (call, tool) -- a
         # question that used 2 tools contributes to both tools' counts, by
-        # design (sql/11_multi_tool_attribution_fix.sql). That's correct for
+        # design (sql/08_unified_agent_observability.sql). That's correct for
         # "Queries by tool" but would double-count a multi-tool question in
         # totals/by-channel, so those use VW_AGENT_CALLS_SUMMARY instead,
         # which has exactly one row per real call.
@@ -195,7 +195,7 @@ with tab3:
     except Exception as e:
         st.warning(
             f"Couldn't load unified observability metrics — has "
-            f"sql/07_unified_agent_observability.sql been run, and does the role "
+            f"sql/08_unified_agent_observability.sql been run, and does the role "
             f"running this app have SNOWFLAKE.CORTEX_USER + MONITOR on the agent? ({e})"
         )
 
@@ -255,4 +255,4 @@ with tab3:
             with st.expander("Raw accuracy data"):
                 st.dataframe(acc, use_container_width=True)
     except Exception as e:
-        st.warning(f"Couldn't load agent metrics — has sql/05_dashboards_and_agent_logging.sql been run? ({e})")
+        st.warning(f"Couldn't load agent metrics — has sql/06_dashboards_and_agent_logging.sql been run? ({e})")

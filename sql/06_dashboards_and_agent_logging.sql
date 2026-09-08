@@ -78,7 +78,12 @@ USE SCHEMA PUBLIC;
 CREATE TABLE IF NOT EXISTS AGENT_INTERACTION_LOG (
   LOG_ID          VARCHAR(36)      DEFAULT UUID_STRING(),
   QUESTION        VARCHAR(2000),
-  TOOL_NAME       VARCHAR(50),      -- Self-Service_Analytics_Agent | Document_Q_A_Agent | Data_Quality_Agent (sanitized tool_spec.name -- see sql/03_create_unified_agent.sql)
+  -- Comma-joined when a question uses more than one tool, e.g.
+  -- "Document_Q_A_Agent,Self-Service_Analytics_Agent" -- confirmed live that
+  -- a single question can legitimately invoke multiple named tools (see
+  -- streamlit/app.py's call_agent()). Sanitized tool_spec.name values --
+  -- see sql/05_create_unified_agent.sql.
+  TOOL_NAME       VARCHAR(200),
   RESPONSE_TEXT   VARCHAR(16777216),
   HAD_SQL         BOOLEAN DEFAULT FALSE,
   HAD_CITATIONS   BOOLEAN DEFAULT FALSE,
@@ -88,7 +93,21 @@ CREATE TABLE IF NOT EXISTS AGENT_INTERACTION_LOG (
   PRIMARY KEY (LOG_ID)
 );
 
+-- Split the (possibly comma-joined) TOOL_NAME so a multi-tool question
+-- correctly contributes to EVERY tool it used, not just one. Note this means
+-- summing TOTAL_QUERIES across tools double-counts multi-tool questions --
+-- for a true per-interaction total, COUNT(*) directly on AGENT_INTERACTION_LOG
+-- instead (see streamlit/pages/1_Dashboard.py).
 CREATE OR REPLACE VIEW VW_AGENT_ACCURACY_METRICS AS
+WITH exploded AS (
+  SELECT
+    l.LOG_ID,
+    TRIM(t.value::STRING) AS TOOL_NAME,
+    l.HELPFUL_FLAG,
+    l.LATENCY_MS
+  FROM AGENT_INTERACTION_LOG l,
+       LATERAL FLATTEN(INPUT => SPLIT(l.TOOL_NAME, ',')) t
+)
 SELECT
   TOOL_NAME,
   COUNT(*)                                                        AS total_queries,
@@ -97,16 +116,20 @@ SELECT
   COUNT_IF(HELPFUL_FLAG IS NOT NULL)                              AS total_rated,
   COUNT_IF(HELPFUL_FLAG = TRUE) / NULLIF(COUNT_IF(HELPFUL_FLAG IS NOT NULL), 0) AS helpful_rate,
   AVG(LATENCY_MS)                                                 AS avg_latency_ms
-FROM AGENT_INTERACTION_LOG
+FROM exploded
 GROUP BY TOOL_NAME;
 
 CREATE OR REPLACE VIEW VW_AGENT_USAGE_OVER_TIME AS
-SELECT
-  DATE_TRUNC('DAY', CREATED_AT)::DATE AS day,
-  TOOL_NAME,
-  COUNT(*) AS query_count
-FROM AGENT_INTERACTION_LOG
-GROUP BY DATE_TRUNC('DAY', CREATED_AT), TOOL_NAME
+WITH exploded AS (
+  SELECT
+    DATE_TRUNC('DAY', l.CREATED_AT)::DATE AS day,
+    TRIM(t.value::STRING)                 AS TOOL_NAME
+  FROM AGENT_INTERACTION_LOG l,
+       LATERAL FLATTEN(INPUT => SPLIT(l.TOOL_NAME, ',')) t
+)
+SELECT day, TOOL_NAME, COUNT(*) AS query_count
+FROM exploded
+GROUP BY day, TOOL_NAME
 ORDER BY day;
 
 -- Sanity checks

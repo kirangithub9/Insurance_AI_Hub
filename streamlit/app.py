@@ -8,7 +8,7 @@ internally routes each question to whichever tool fits:
   - Document Q&A Agent           -> Cortex Search service (policy documents / RAG)
   - Data Quality Agent           -> Cortex Analyst semantic view over DATA_QUALITY (root cause)
 
-Tool names match the requirement doc word-for-word in sql/03_create_unified_agent.sql,
+Tool names match the requirement doc word-for-word in sql/05_create_unified_agent.sql,
 but the agent runtime sanitizes spaces/"&" to underscores in anything it actually
 returns (tool_use.name, logs, traces) -- see TOOL_LABELS below, which maps those
 sanitized identifiers back to the doc's exact display text.
@@ -67,7 +67,7 @@ def log_interaction(log_id: str, question: str, result: dict, latency_ms: int) -
     TOOL_NAME stores a comma-joined list when the agent used more than one
     tool for this question (e.g. "Document_Q_A_Agent,Self-Service_Analytics_Agent")
     -- confirmed live that a single question can legitimately invoke multiple
-    named tools. sql/11_multi_tool_attribution_fix.sql splits this back out
+    named tools. sql/06_dashboards_and_agent_logging.sql splits this back out
     per tool for the "Queries by tool" / "Helpful Rate by Tool" breakdowns,
     while this row itself still represents ONE real interaction for
     "Total Queries" / "Feedback Given" purposes."""

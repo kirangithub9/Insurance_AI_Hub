@@ -22,20 +22,21 @@ to whichever capability the question actually needs.
 
 ## Repo structure
 
+Files are numbered in the order you run them — each one is idempotent
+(`CREATE OR REPLACE`), so re-running any of them is always safe.
+
 ```
 semantic_model/
   01_create_semantic_view_analytics.sql   Agent 1 — structured data semantic view
 sql/
   02_document_search_agent2.sql           Agent 2 — chunking + Cortex Search service
-  03_create_unified_agent.sql             Wires Agent 1 + 2 (+ 3) into ENTERPRISE_AI_AGENT
-  04_data_quality_agent.sql               Agent 3 — DQ semantic view + agent tool update
-  05_dashboards_and_agent_logging.sql     Snowflake Intelligence dashboards + interaction log
-  06_create_mcp_server.sql                MCP Integration — exposes tools as an MCP server
-  07_unified_agent_observability.sql      Unified usage view (Streamlit + MCP) via native AI Observability
-  08_dq_agent_enhancements.sql            DQ_COLUMN_HEALTH history backfill + DQ_DOWNSTREAM_IMPACT lineage table, closing two Agent 3 example-question gaps found against the authoritative requirement doc
-  09_rename_agent_tools.sql               Renames tool_spec.name to the requirement doc's exact wording and backfills historical AGENT_INTERACTION_LOG rows to match
-  10_reset_observability_baseline.sql     Resets the "Usage — all channels" dashboard counters by adding a cutoff to VW_AGENT_OBSERVABILITY_CALLS (re-run with a fresh MAX(TIMESTAMP) baseline any time, e.g. before a demo)
-  11_multi_tool_attribution_fix.sql       Fixes multi-tool questions being silently attributed to only one tool; adds VW_AGENT_CALLS_SUMMARY for un-inflated call totals
+  03_dq_agent_enhancements.sql            DQ_COLUMN_HEALTH history + DQ_DOWNSTREAM_IMPACT lineage table (must run before 04 — its semantic view references both)
+  04_data_quality_agent.sql               Agent 3 — DQ semantic view
+  05_create_unified_agent.sql             Wires Agents 1 + 2 + 3 into ENTERPRISE_AI_AGENT
+  06_dashboards_and_agent_logging.sql     Snowflake Intelligence dashboards + interaction log
+  07_create_mcp_server.sql                MCP Integration — exposes the agent as an MCP server
+  08_unified_agent_observability.sql      Unified usage view (Streamlit + MCP) via native AI Observability
+  util_reset_observability_baseline.sql   Optional — hides pre-existing test/demo traffic from the "Usage — all channels" counters; not part of setup
 streamlit/
   app.py                                  Chat UI (Streamlit-in-Snowflake), logs every interaction
   pages/1_Dashboard.py                    Portfolio/risk, trend, and agent-accuracy dashboard
@@ -56,24 +57,23 @@ docs/
 3. Run `sql/02_document_search_agent2.sql` — chunks `POLICY_DOCUMENTS.CONTENT_TEXT`
    into `DOCUMENT_CHUNKS` and creates the `POLICY_DOCUMENT_SEARCH_SVC` Cortex
    Search service.
-4. Run `sql/08_dq_agent_enhancements.sql`, then `sql/04_data_quality_agent.sql`
-   — 08 backfills DQ_COLUMN_HEALTH history and creates DQ_DOWNSTREAM_IMPACT
+4. Run `sql/03_dq_agent_enhancements.sql`, then `sql/04_data_quality_agent.sql`
+   — 03 backfills DQ_COLUMN_HEALTH history and creates DQ_DOWNSTREAM_IMPACT
    (needed for the "biggest score drop" / "downstream reporting impacted"
    questions), then 04 creates the DQ semantic view referencing both.
-5. Run `sql/03_create_unified_agent.sql` — creates `ENTERPRISE_AI_AGENT` with
-   all three tools wired up, then `sql/09_rename_agent_tools.sql` if you have
-   pre-existing `AGENT_INTERACTION_LOG` rows from an older tool-naming scheme.
-6. Run `sql/05_dashboards_and_agent_logging.sql` — creates the portfolio/risk,
+5. Run `sql/05_create_unified_agent.sql` — creates `ENTERPRISE_AI_AGENT` with
+   all three tools wired up.
+6. Run `sql/06_dashboards_and_agent_logging.sql` — creates the portfolio/risk,
    trend, and agent-accuracy views plus the `AGENT_INTERACTION_LOG` table the
    dashboard reads from.
-7. Run `sql/06_create_mcp_server.sql` — creates `ENTERPRISE_AI_MCP_SERVER`
+7. Run `sql/07_create_mcp_server.sql` — creates `ENTERPRISE_AI_MCP_SERVER`
    (MCP Integration requirement).
-8. Run `sql/07_unified_agent_observability.sql` — creates `VW_AGENT_OBSERVABILITY_CALLS`,
-   `VW_AGENT_USAGE_ALL_CHANNELS`, and `VW_AGENT_CHANNEL_SPLIT`, which read Snowflake's
-   native `SNOWFLAKE.LOCAL.GET_AI_OBSERVABILITY_EVENTS` so the dashboard can show usage
-   from MCP callers too, not just Streamlit. The role running the Streamlit app needs
-   `GRANT DATABASE ROLE SNOWFLAKE.CORTEX_USER` and `GRANT MONITOR ON AGENT
-   ENTERPRISE_AI_AGENT` first (see comment at the top of that file).
+8. Run `sql/08_unified_agent_observability.sql` — creates `VW_AGENT_OBSERVABILITY_CALLS`,
+   `VW_AGENT_USAGE_ALL_CHANNELS`, `VW_AGENT_CHANNEL_SPLIT`, and `VW_AGENT_CALLS_SUMMARY`,
+   which read Snowflake's native `SNOWFLAKE.LOCAL.GET_AI_OBSERVABILITY_EVENTS` so the
+   dashboard can show usage from MCP callers too, not just Streamlit. The role running
+   the Streamlit app needs `GRANT DATABASE ROLE SNOWFLAKE.CORTEX_USER` and `GRANT
+   MONITOR ON AGENT ENTERPRISE_AI_AGENT` first (see comment at the top of that file).
 9. In Snowsight: **Streamlit > + Streamlit App**, point it at `streamlit/app.py`
    (with `streamlit/pages/1_Dashboard.py` alongside it for the multipage
    dashboard) inside `INSURANCE_AI_HUB.PUBLIC`, attach `environment.yml`, and run.

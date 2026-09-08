@@ -51,7 +51,7 @@ zero mention of product matching, price optimization, or market intelligence
 agents anywhere in it. This confirms the mapping above was correct, not a
 substitution to defend: **Self-Service Analytics Agent** / **Document Q&A
 Agent** / **Data Quality Agent** *are* the literal ask — and
-`sql/03_create_unified_agent.sql`'s `tool_spec.name` values were renamed
+`sql/05_create_unified_agent.sql`'s `tool_spec.name` values were renamed
 from the original compact identifiers (`AnalyticsAgent`/`DocumentQA`/
 `DataQualityAgent`) to that exact wording, confirmed live end-to-end
 (see `docs/ARCHITECTURE.md`, "Resolved during build"). Note the agent
@@ -74,7 +74,7 @@ Every example question in that doc was checked against the live schema
 | "Which column caused the biggest score drop" | Originally ❌ — `DQ_COLUMN_HEALTH` had exactly one snapshot date, no history to compute a drop from. **Fixed**: see below. |
 | "Is any downstream reporting impacted" | Originally ❌ — no lineage/downstream-dependency table existed anywhere. **Fixed**: see below. |
 
-**Fix for the two real gaps** (`sql/08_dq_agent_enhancements.sql`, wired into
+**Fix for the two real gaps** (`sql/03_dq_agent_enhancements.sql`, wired into
 `DQ_SEMANTIC_VIEW` in `sql/04_data_quality_agent.sql`):
 - Backfilled two earlier `DQ_COLUMN_HEALTH` snapshots per column (2025-01-01,
   2025-01-08), derived proportionally from each column's existing
@@ -89,6 +89,6 @@ Every example question in that doc was checked against the live schema
   `VW_TREND_ANALYSIS`, `VW_CHURN_TREND`), not invented product data.
 
 Both fixes were verified live via `SEMANTIC_VIEW()` queries before being
-called done — see the bottom of `sql/08_dq_agent_enhancements.sql` and the
+called done — see the bottom of `sql/03_dq_agent_enhancements.sql` and the
 "Which column caused the biggest score drop" / "Is any downstream reporting
 impacted" rows above.
